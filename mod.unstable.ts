@@ -120,7 +120,8 @@ export default class ProgressBar {
     const percent = ((completed / total) * 100).toFixed(2) + "%";
 
     // :title :percent :bar :time :completed/:total
-    let str = this.display
+    let str = this
+      .display
       .replace(":title", options.title ?? this.title)
       .replace(":time", this.time)
       .replace(":percent", percent)
@@ -154,10 +155,14 @@ export default class ProgressBar {
 
     const complete = new Array(roundedCompleteLength).fill(
       options.complete ?? this.complete,
-    ).join("");
+    ).join(
+      "",
+    );
     const incomplete = new Array(
       Math.max(width - roundedCompleteLength - (precision ? 1 : 0), 0),
-    ).fill(options.incomplete ?? this.incomplete).join("");
+    )
+      .fill(options.incomplete ?? this.incomplete)
+      .join("");
 
     str = str.replace(":bar", complete + precise + incomplete);
 

@@ -1,14 +1,9 @@
+import { bgCyan, bgMagenta } from "https://deno.land/std@0.74.0/fmt/colors.ts";
 import ProgressBar from "../mod.ts";
-import {
-  bgMagenta,
-  bgCyan,
-} from "https://deno.land/std@0.74.0/fmt/colors.ts";
 
 const total = 100;
 
-const progress = new ProgressBar({
-  total,
-});
+const progress = new ProgressBar({ total });
 
 let completed = 0;
 

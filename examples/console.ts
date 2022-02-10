@@ -3,10 +3,7 @@ import ProgressBar from "../mod.ts";
 const title = "interval:";
 const total = 100;
 
-const progress = new ProgressBar({
-  title,
-  total,
-});
+const progress = new ProgressBar({ title, total });
 
 let completed = 0;
 

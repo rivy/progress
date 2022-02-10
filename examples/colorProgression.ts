@@ -1,11 +1,9 @@
-import ProgressBar from "../mod.ts";
 import { bgRgb24 } from "https://deno.land/std@0.74.0/fmt/colors.ts";
+import ProgressBar from "../mod.ts";
 
 const total = 100;
 
-const progress = new ProgressBar({
-  total,
-});
+const progress = new ProgressBar({ total });
 
 let completed = 0;
 

@@ -18,16 +18,17 @@ function downloading() {
   if (completed1 <= total || completed2 <= total) {
     completed1 += 1;
     completed2 += 2;
-    bars.render([
-      {
-        completed: completed1,
-        total,
-        text: "file1",
-        complete: "*",
-        incomplete: ".",
-      },
-      { completed: completed2, total, text: "file2" },
-    ]);
+    bars.render([{
+      completed: completed1,
+      total,
+      text: "file1",
+      complete: "*",
+      incomplete: ".",
+    }, {
+      completed: completed2,
+      total,
+      text: "file2",
+    }]);
 
     setTimeout(function () {
       downloading();

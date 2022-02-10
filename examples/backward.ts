@@ -1,9 +1,6 @@
 import ProgressBar from "../mod.ts";
 
-const progress = new ProgressBar({
-  title: "backward",
-  total: 100,
-});
+const progress = new ProgressBar({ title: "backward", total: 100 });
 
 let completed = 0;
 

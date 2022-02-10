@@ -82,7 +82,7 @@ export class MultiProgressBar {
    *   - `text` optional, text displayed per ProgressBar, default: ''
    *   - `complete` - optional, completion character
    *   - `incomplete` - optional, incomplete character
-   **/
+   */
   render(bars: Array<renderOptions>): void {
     if (this.#end || !isTTY) return;
 
@@ -102,7 +102,8 @@ export class MultiProgressBar {
       end = false;
       const percent = ((completed / total) * 100).toFixed(2) + "%";
       // :bar :text :percent :time :completed/:total
-      let str = this.display
+      let str = this
+        .display
         .replace(":text", text)
         .replace(":time", this.time)
         .replace(":percent", percent)
@@ -121,9 +122,9 @@ export class MultiProgressBar {
       const complete = new Array(completeLength).fill(
         options.complete ?? this.complete,
       ).join("");
-      const incomplete = new Array(width - completeLength).fill(
-        options.incomplete ?? this.incomplete,
-      ).join("");
+      const incomplete = new Array(width - completeLength)
+        .fill(options.incomplete ?? this.incomplete)
+        .join("");
 
       str = str.replace(":bar", complete + incomplete);
       this.#strs[index++] = str;
