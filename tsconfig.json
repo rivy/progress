@@ -9,5 +9,15 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "exclude": ["vendor"]
+  "exclude": ["vendor"],
+  // * `deno fmt` options (usable for Deno v1.14+)
+  "fmt": {
+    "options": {
+      "useTabs": true,
+      "lineWidth": 100,
+      "indentWidth": 2,
+      "singleQuote": true,
+      "proseWrap": "preserve"
+    }
+  }
 }
