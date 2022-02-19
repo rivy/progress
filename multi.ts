@@ -3,6 +3,14 @@ import { bgGreen, bgWhite, writeAllSync } from "./deps.ts";
 const isTTY = Deno.isatty(Deno.stdout.rid);
 const isWindow = Deno.build.os === "windows";
 
+// ANSI CSI sequences; ref: <https://en.wikipedia.org/wiki/ANSI_escape_code> @@ <https://archive.is/CUtrX>
+const ansiCSI = {
+  showCursor: '\x1b[?25h',
+  hideCursor: '\x1b[?25l',
+  clearEOS: '\x1b[0J',
+  clearEOL: '\x1b[0K',
+};
+
 interface constructorOptions {
   title?: string;
   width?: number;
@@ -98,7 +106,10 @@ export class MultiProgressBar {
         throw new Error(`completed must greater than or equal to 0`);
       }
       if (!Number.isInteger(total)) throw new Error(`total must be 'number'`);
-      if (completed > total && this.#strs[index] != undefined) continue;
+      if (completed > total && this.#strs[index] != undefined) {
+        if (!this.clear) index += 1;
+        continue;
+      }
       end = false;
       const percent = ((completed / total) * 100).toFixed(2) + "%";
       // :bar :text :percent :time :completed/:total
@@ -128,14 +139,19 @@ export class MultiProgressBar {
       str = str.replace(":bar", complete + incomplete);
       this.#strs[index++] = str;
     }
+    for (let i = index; i < this.#strs.length; i++) {
+      this.#strs[index] = '';
+    }
     if (ms < this.interval && end == false) return;
-    const renderStr = this.#strs.join("\n");
+    const renderStr = this.#strs.join(`\n${ansiCSI.clearEOL}`);
 
     if (renderStr !== this.lastStr) {
-      this.resetScreen();
+      this.hideCursor();
+      this.resetPosition();
       this.write(renderStr);
       this.lastStr = renderStr;
       this.#lastRows = this.#strs.length;
+      this.showCursor();
     }
 
     if (end) this.end();
@@ -161,20 +177,29 @@ export class MultiProgressBar {
    * @param message The message to write
    */
   console(message: string | number): void {
-    this.resetScreen();
+    this.hideCursor();
+    this.resetPosition();
     this.write(`${message}`);
     this.breakLine();
     this.write(this.lastStr);
+    this.showCursor();
   }
 
   private write(msg: string): void {
-    msg = `${msg}\x1b[?25l`;
+    msg = `${msg}${ansiCSI.clearEOL}`;
     this.stdoutWrite(msg);
   }
 
   private resetScreen() {
+    this.resetPosition();
     if (this.#lastRows > 0) {
-      this.stdoutWrite("\x1b[" + (this.#lastRows - 1) + "A\r\x1b[?0J");
+      this.stdoutWrite(`${ansiCSI.clearEOS}`);
+    }
+  }
+
+  private resetPosition() {
+    if (this.#lastRows > 0) {
+      this.stdoutWrite('\x1b[' + (this.#lastRows - 1) + 'A\r');
     }
   }
 
@@ -183,14 +208,18 @@ export class MultiProgressBar {
   }
 
   private breakLine() {
-    this.stdoutWrite("\r\n");
+    this.stdoutWrite(`\r\n${ansiCSI.clearEOL}`);
   }
 
   private stdoutWrite(msg: string) {
     writeAllSync(Deno.stdout, this.encoder.encode(msg));
   }
 
+  private hideCursor(): void {
+    this.stdoutWrite(`${ansiCSI.hideCursor}`);
+  }
+
   private showCursor(): void {
-    this.stdoutWrite("\x1b[?25h");
+    this.stdoutWrite(`${ansiCSI.showCursor}`);
   }
 }
