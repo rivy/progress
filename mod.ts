@@ -22,7 +22,7 @@ function ttySize(rid = Deno.stdout.rid) {
 }
 
 interface constructorOptions {
-	title?: string;
+	label?: string;
 	goal?: number;
 	progressBarWidth?: number;
 	symbolComplete?: string;
@@ -35,7 +35,7 @@ interface constructorOptions {
 }
 
 interface updateOptions {
-	title?: string;
+	label?: string;
 	goal?: number;
 	symbolComplete?: string;
 	symbolIncomplete?: string;
@@ -43,7 +43,7 @@ interface updateOptions {
 }
 
 export default class Progress {
-	title: string;
+	label: string;
 	goal?: number;
 	progressBarWidth: number;
 	symbolComplete: string;
@@ -64,20 +64,20 @@ export default class Progress {
 	private encoder = new TextEncoder();
 
 	/**
-	 * Title, total, complete, incomplete, can also be set or changed in the update method
+	 * Label, goal, symbolComplete, symbolIncomplete, and symbolIntermediate also be changed dynamically in the update method
 	 *
-	 * @param title Progress bar title, default: ''
+	 * @param label Progress bar label, default: ''
 	 * @param goal total number of ticks to complete,
 	 * @param progressBarWidth the displayed width of the progress, default: 50
 	 * @param symbolComplete completion symbol, default: colors.bgGreen(' ')
 	 * @param symbolIncomplete incomplete symbol, default: colors.bgWhite(' ')
 	 * @param clearOnComplete  clear the bar on completion, default: false
 	 * @param minInterval  minimum time between updates in milliseconds, default: 16
-	 * @param progressTemplate  What is displayed and display order, default: ':title :percent :bar :elapsed :value/:goal'
+	 * @param progressTemplate  What is displayed and display order, default: ':label :percent :bar :elapsed :value/:goal'
 	 */
 	constructor(
 		{
-			title = '',
+			label = '',
 			goal,
 			progressBarWidth = 50,
 			symbolComplete = bgGreen(' '),
@@ -89,7 +89,7 @@ export default class Progress {
 			writer = Deno.stdout,
 		}: constructorOptions = {},
 	) {
-		this.title = title;
+		this.label = label;
 		this.goal = goal;
 		this.progressBarWidth = progressBarWidth;
 		this.symbolComplete = symbolComplete;
@@ -97,7 +97,7 @@ export default class Progress {
 		this.symbolIncomplete = symbolIncomplete;
 		this.clearOnComplete = clearOnComplete;
 		this.minInterval = minInterval;
-		this.progressTemplate = progressTemplate ?? ':title :percent :bar :elapsed :value/:goal';
+		this.progressTemplate = progressTemplate ?? ':label :percent :bar :elapsed :value/:goal';
 		this.writer = writer;
 		this.isTTY = Deno.isatty(writer.rid);
 		this.ttyColumns = ttySize(writer.rid)?.columns ?? 100;
@@ -108,7 +108,7 @@ export default class Progress {
 	 *
 	 * - `value` - current value
 	 * - `options` - optional dynamic parameters (constructed configuration overrides)
-	 *   - `title` - progress bar title
+	 *   - `label` - progress bar label
 	 *   - `goal` - target value for completion
 	 *   - `symbolComplete` - completion symbol
 	 *   - `symbolIncomplete` - incomplete symbol
@@ -170,11 +170,11 @@ export default class Progress {
 				.format(value / (age / 1000)),
 		);
 
-		// :title :elapsed :eta :goal :percent :rate :value
-		const title = options.title ?? this.title;
+		// :label :elapsed :eta :goal :percent :rate :value
+		const label = options.label ?? this.label;
 		let text = this
 			.progressTemplate
-			.replace(/:title(\s?)/, title.length ? (title + '$1') : '')
+			.replace(/:label(\s?)/, label.length ? (label + '$1') : '')
 			.replace(':elapsed', elapsed)
 			.replace(':eta', eta)
 			.replace(':goal', goal + '')
