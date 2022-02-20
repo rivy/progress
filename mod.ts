@@ -60,7 +60,6 @@ export default class Progress {
 	private startTime = Date.now();
 	private priorUpdateText = '';
 	private priorUpdateTime = 0;
-	private age?: string;
 
 	private encoder = new TextEncoder();
 
@@ -74,7 +73,7 @@ export default class Progress {
 	 * @param symbolIncomplete incomplete symbol, default: colors.bgWhite(' ')
 	 * @param clearOnComplete  clear the bar on completion, default: false
 	 * @param minInterval  minimum time between updates in milliseconds, default: 16
-	 * @param progressTemplate  What is displayed and display order, default: ':title :percent :bar :age :value/:goal'
+	 * @param progressTemplate  What is displayed and display order, default: ':title :percent :bar :elapsed :value/:goal'
 	 */
 	constructor(
 		{
@@ -98,7 +97,7 @@ export default class Progress {
 		this.symbolIncomplete = symbolIncomplete;
 		this.clearOnComplete = clearOnComplete;
 		this.minInterval = minInterval;
-		this.progressTemplate = progressTemplate ?? ':title :percent :bar :age :value/:goal';
+		this.progressTemplate = progressTemplate ?? ':title :percent :bar :elapsed :value/:goal';
 		this.writer = writer;
 		this.isTTY = Deno.isatty(writer.rid);
 		this.ttyColumns = ttySize(writer.rid)?.columns ?? 100;
@@ -128,14 +127,17 @@ export default class Progress {
 		if (msUpdateInterval < this.minInterval && value < goal) return;
 
 		this.priorUpdateTime = now;
-		this.age = sprintf(
+
+		const age = now - this.startTime; // ms
+
+		const elapsed = sprintf(
 			'%ss',
 			new Intl.NumberFormat(undefined, {
 				minimumIntegerDigits: 1,
 				minimumFractionDigits: 1,
 				maximumFractionDigits: 1,
 			})
-				.format((now - this.startTime) / 1000),
+				.format(age / 1000),
 		);
 
 		const percent = sprintf(
@@ -148,12 +150,12 @@ export default class Progress {
 				.format((value / goal) * 100),
 		);
 
-		// :title :age :goal :percent :value
+		// :title :elapsed :goal :percent :value
 		const title = options.title ?? this.title;
 		let text = this
 			.progressTemplate
 			.replace(/:title(\s?)/, title.length ? (title + '$1') : '')
-			.replace(':age', this.age)
+			.replace(':elapsed', elapsed)
 			.replace(':goal', goal + '')
 			.replace(':percent', percent)
 			.replace(':value', value + '');
