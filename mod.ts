@@ -41,7 +41,6 @@ interface updateOptions {
 }
 
 export default class Progress {
-	title: string;
 	goal?: number;
 	progressBarWidth: number;
 	symbolComplete: string;
@@ -54,11 +53,15 @@ export default class Progress {
 	ttyColumns: number;
 	isTTY: boolean;
 
-	private isCompleted = false;
-	private startTime = Date.now();
-	private priorUpdateText = '';
-	private priorUpdateTime = 0;
-	private age?: string;
+	#isCompleted = false;
+	#startTime = Date.now();
+	#priorUpdateText = '';
+	#priorUpdateTime = 0;
+	#age?: string;
+
+	#text: string[] = [];
+	#updateStartIndex = 0;
+	#priorUpdatedRows = 0;
 
 	private encoder = new TextEncoder();
 
@@ -88,7 +91,10 @@ export default class Progress {
 			writer = Deno.stderr,
 		}: constructorOptions = {},
 	) {
-		this.title = title;
+		if (title.length > 0) {
+			this.#text.push(title);
+			this.#updateStartIndex = 1;
+		}
 		this.goal = goal;
 		this.progressBarWidth = progressBarWidth;
 		this.symbolComplete = symbolComplete;
@@ -114,7 +120,7 @@ export default class Progress {
 	 *   - `symbolIntermediate` - intermediate symbols
 	 */
 	update(value: number, options: updateOptions = {}): void {
-		if (this.isCompleted || !this.isTTY) return;
+		if (this.#isCompleted || !this.isTTY) return;
 
 		if (value < 0) {
 			throw new Error(`progress: value must be greater than or equal to 0`);
@@ -122,18 +128,18 @@ export default class Progress {
 
 		const goal = options.goal ?? this.goal ?? 100;
 		const now = Date.now();
-		const ms = now - this.priorUpdateTime;
+		const ms = now - this.#priorUpdateTime;
 		if (ms < this.minInterval && value < goal) return;
 
-		this.priorUpdateTime = now;
-		this.age = sprintf(
+		this.#priorUpdateTime = now;
+		this.#age = sprintf(
 			'%4ss',
 			new Intl.NumberFormat(undefined, {
 				minimumIntegerDigits: 1,
 				minimumFractionDigits: 1,
 				maximumFractionDigits: 1,
 			})
-				.format((now - this.startTime) / 1000),
+				.format((now - this.#startTime) / 1000),
 		);
 
 		const percent = sprintf(
@@ -151,7 +157,7 @@ export default class Progress {
 		let text = this
 			.progressTemplate
 			.replace(/:title(\s?)/, title.length ? (title + '$1') : '')
-			.replace(':age', this.age)
+			.replace(':age', this.#age)
 			.replace(':goal', goal + '')
 			.replace(':percent', percent)
 			.replace(':value', value + '');
@@ -185,9 +191,9 @@ export default class Progress {
 
 		text = text.replace(':bar', complete + precise + incomplete);
 
-		if (text !== this.priorUpdateText) {
+		if (text !== this.#priorUpdateText) {
 			this.#write(text);
-			this.priorUpdateText = text;
+			this.#priorUpdateText = text;
 		}
 
 		if (finished) this.end();
@@ -198,7 +204,7 @@ export default class Progress {
 	 * No need to call in most cases, unless you want to end before 100%
 	 */
 	end(): void {
-		this.isCompleted = true;
+		this.#isCompleted = true;
 		if (this.clearOnComplete) {
 			this.#write();
 		} else {
@@ -216,7 +222,7 @@ export default class Progress {
 		this.#hideCursor();
 		this.#write(`${message}`);
 		this.#toNextLine();
-		this.#write(this.priorUpdateText);
+		this.#write(this.#priorUpdateText);
 		this.#showCursor();
 	}
 
