@@ -1,4 +1,4 @@
-import { bgGreen, bgWhite, writeAllSync } from './deps.ts';
+import { bgGreen, bgWhite, sprintf, writeAllSync } from './deps.ts';
 export { MultiProgressBar } from './multi.ts';
 
 const isWinOS = Deno.build.os === 'windows';
@@ -129,9 +129,25 @@ export default class Progress {
 		if (ms < this.minInterval && value < goal) return;
 
 		this.priorUpdateTime = now;
-		this.age = ((now - this.startTime) / 1000).toFixed(1) + 's';
+		this.age = sprintf(
+			'%4ss',
+			new Intl.NumberFormat(undefined, {
+				minimumIntegerDigits: 1,
+				minimumFractionDigits: 1,
+				maximumFractionDigits: 1,
+			})
+				.format((now - this.startTime) / 1000),
+		);
 
-		const percent = ((value / goal) * 100).toFixed(2) + '%';
+		const percent = sprintf(
+			'%3s%%',
+			new Intl.NumberFormat(undefined, {
+				minimumIntegerDigits: 1,
+				minimumFractionDigits: 0,
+				maximumFractionDigits: 0,
+			})
+				.format((value / goal) * 100),
+		);
 
 		// :title :age :goal :percent :value
 		let text = this
