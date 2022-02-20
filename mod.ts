@@ -1,7 +1,6 @@
 import { bgGreen, bgWhite, writeAllSync } from './deps.ts';
 export { MultiProgressBar } from './multi.ts';
 
-const isTTY = Deno.isatty(Deno.stdout.rid);
 const isWindow = Deno.build.os === 'windows';
 
 type ConsoleSize = { columns: number; rows: number };
@@ -33,6 +32,7 @@ interface constructorOptions {
 	clear?: boolean;
 	interval?: number;
 	display?: string;
+	writer?: Deno.WriterSync & { rid: number };
 }
 
 interface renderOptions {
@@ -53,7 +53,9 @@ export default class ProgressBar {
 	clear: boolean;
 	interval: number;
 	display: string;
+	writer: Deno.WriterSync & { rid: number };
 	ttyColumns: number;
+	isTTY: boolean;
 
 	private isCompleted = false;
 	private lastStr = '';
@@ -85,6 +87,7 @@ export default class ProgressBar {
 			clear = false,
 			interval = 16,
 			display,
+			writer = Deno.stdout,
 		}: constructorOptions = {},
 	) {
 		this.title = title;
@@ -96,7 +99,9 @@ export default class ProgressBar {
 		this.clear = clear;
 		this.interval = interval;
 		this.display = display ?? ':title :percent :bar :time :completed/:total';
-		this.ttyColumns = ttySize()?.columns ?? 100;
+		this.writer = writer;
+		this.isTTY = Deno.isatty(writer.rid);
+		this.ttyColumns = ttySize(writer.rid)?.columns ?? 100;
 	}
 
 	/**
@@ -110,7 +115,7 @@ export default class ProgressBar {
 	 *   - `incomplete` - incomplete character, If you want to change at a certain moment. For example, it turns red at 20%
 	 */
 	render(completed: number, options: renderOptions = {}): void {
-		if (this.isCompleted || !isTTY) return;
+		if (this.isCompleted || !this.isTTY) return;
 
 		if (completed < 0) {
 			throw new Error(`completed must greater than or equal to 0`);
@@ -165,7 +170,7 @@ export default class ProgressBar {
 		str = str.replace(':bar', complete + precise + incomplete);
 
 		if (str !== this.lastStr) {
-			this.write(str);
+			this.#write(str);
 			this.lastStr = str;
 		}
 
@@ -179,7 +184,7 @@ export default class ProgressBar {
 	end(): void {
 		this.isCompleted = true;
 		if (this.clear) {
-			this.stdoutWrite('\r');
+			this.#writeRaw('\r');
 			this.clearLine();
 		} else {
 			this.breakLine();
@@ -194,39 +199,39 @@ export default class ProgressBar {
 	 */
 	console(message: string | number): void {
 		this.clearLine();
-		this.write(`${message}`);
+		this.#write(`${message}`);
 		this.breakLine();
-		this.write(this.lastStr);
+		this.#write(this.lastStr);
 	}
 
-	private write(msg: string): void {
+	#write(msg: string): void {
 		msg = `\r${msg}\x1b[?25l`;
-		this.stdoutWrite(msg);
+		this.#writeRaw(msg);
+	}
+
+	#writeRaw(msg: string) {
+		writeAllSync(this.writer, this.encoder.encode(msg));
 	}
 
 	private breakLine() {
-		this.stdoutWrite('\r\n');
-	}
-
-	private stdoutWrite(msg: string) {
-		writeAllSync(Deno.stdout, this.encoder.encode(msg));
+		this.#writeRaw('\r\n');
 	}
 
 	private clearLine(direction: Direction = Direction.all): void {
 		switch (direction) {
 			case Direction.all:
-				this.stdoutWrite('\x1b[2K');
+				this.#writeRaw('\x1b[2K');
 				break;
 			case Direction.left:
-				this.stdoutWrite('\x1b[1K');
+				this.#writeRaw('\x1b[1K');
 				break;
 			case Direction.right:
-				this.stdoutWrite('\x1b[0K');
+				this.#writeRaw('\x1b[0K');
 				break;
 		}
 	}
 
 	private showCursor(): void {
-		this.stdoutWrite('\x1b[?25h');
+		this.#writeRaw('\x1b[?25h');
 	}
 }
