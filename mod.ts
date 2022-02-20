@@ -4,6 +4,21 @@ export { MultiProgressBar } from './multi.ts';
 const isTTY = Deno.isatty(Deno.stdout.rid);
 const isWindow = Deno.build.os === 'windows';
 
+type ConsoleSize = { columns: number; rows: number };
+function ttySize(rid = Deno.stdout.rid) {
+	// `Deno.consoleSize()` is unstable API (as of v1.19+) => deno-lint-ignore no-explicit-any
+	// deno-lint-ignore no-explicit-any
+	const denoConsoleSize = (Deno as any).consoleSize as (rid: number) => ConsoleSize | undefined;
+	let size: ConsoleSize | undefined;
+	try {
+		// * `denoConsoleSize()` may throw (if rid is not a TTY [ie, redirected])
+		size = denoConsoleSize?.(rid);
+	} catch {
+		size = undefined;
+	}
+	return size;
+}
+
 const enum Direction {
 	left,
 	right,
@@ -40,6 +55,7 @@ export default class ProgressBar {
 	clear: boolean;
 	interval: number;
 	display: string;
+	ttyColumns: number;
 
 	private isCompleted = false;
 	private lastStr = '';
@@ -82,6 +98,7 @@ export default class ProgressBar {
 		this.clear = clear;
 		this.interval = interval;
 		this.display = display ?? ':title :percent :bar :time :completed/:total';
+		this.ttyColumns = ttySize()?.columns ?? 100;
 	}
 
 	/**
@@ -187,10 +204,6 @@ export default class ProgressBar {
 	private write(msg: string): void {
 		msg = `\r${msg}\x1b[?25l`;
 		this.stdoutWrite(msg);
-	}
-
-	private get ttyColumns(): number {
-		return 100;
 	}
 
 	private breakLine() {
