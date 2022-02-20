@@ -3,24 +3,20 @@ import Progress from '../mod.ts';
 const label = 'interval:';
 const goal = 100;
 
-const progress = new Progress({
-	label,
-	goal,
-	// here ==>
-	// width: 20
-	progressBarWidth: 1000, // longer than the terminal width
-	// <== here
-});
+const progress = new Progress({ label, goal });
 
 let completed = 0;
 
 function downloading() {
 	if (completed <= goal) {
 		progress.update(completed++);
+		// here ==>
+		if (completed % 20 === 0) progress.log(completed);
+		// <== here
 
 		setTimeout(function () {
 			downloading();
-		}, 100);
+		}, 50);
 	}
 }
 

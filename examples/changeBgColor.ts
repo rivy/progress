@@ -1,23 +1,22 @@
 import { bgCyan, bgMagenta } from 'https://deno.land/std@0.74.0/fmt/colors.ts';
-import ProgressBar from '../mod.ts';
+import Progress from '../mod.ts';
 
-const total = 100;
+const goal = 100;
 
-const progress = new ProgressBar({ total });
+const progress = new Progress({ goal });
 
 let completed = 0;
 
 function run() {
-	if (completed <= total) {
+	if (completed <= goal) {
 		if (completed >= 20) {
-			progress.render(completed++, {
+			progress.update(completed++, {
 				// ==> here
-				complete: bgMagenta(' '),
-				incomplete: bgCyan(' '),
+				symbolIncomplete: bgCyan(' '),
 				// <== here
 			});
 		} else {
-			progress.render(completed++);
+			progress.update(completed++);
 		}
 
 		setTimeout(function () {

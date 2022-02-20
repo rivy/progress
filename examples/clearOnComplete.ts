@@ -5,10 +5,8 @@ const goal = 100;
 const progress = new Progress({
 	goal,
 	// ==> here
-	symbolComplete: '=',
-	symbolIncomplete: '-',
+	clearOnComplete: true,
 	// <== here
-	completeTemplate: ':percent :label',
 });
 
 let completed = 0;

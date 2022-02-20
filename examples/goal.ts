@@ -1,10 +1,10 @@
-import ProgressBar from '../mod.ts';
+import Progress from '../mod.ts';
 
-const title = 'total test';
-const total = 100;
+const label = '[goal test]';
+const goal = 100;
 
-const progress = new ProgressBar({
-	title,
+const progress = new Progress({
+	label,
 	// Can also be set within the render method
 	// total
 });
@@ -12,10 +12,10 @@ const progress = new ProgressBar({
 let completed = 0;
 
 function downloading() {
-	if (completed <= total) {
+	if (completed <= goal) {
 		// Can also be set in the constructor
 		// ==> here
-		progress.render(completed++, { total });
+		progress.update(completed++, { goal });
 		// <== here
 
 		setTimeout(function () {

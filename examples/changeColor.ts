@@ -1,23 +1,23 @@
-import { green, yellow } from 'https://deno.land/std@0.74.0/fmt/colors.ts';
-import ProgressBar from '../mod.ts';
+import { green, red, yellow } from 'https://deno.land/std@0.74.0/fmt/colors.ts';
+import Progress from '../mod.ts';
 
-const total = 100;
+const goal = 100;
 
-const progress = new ProgressBar({ total, complete: '=', incomplete: '-' });
+const progress = new Progress({ goal, symbolComplete: red('='), symbolIncomplete: yellow('-') });
 
 let completed = 0;
 
 function run() {
-	if (completed <= total) {
+	if (completed <= goal) {
 		if (completed >= 20) {
-			progress.render(completed++, {
+			progress.update(completed++, {
 				// ==> here
-				complete: green('='),
-				incomplete: yellow('-'),
+				symbolComplete: green('='),
+				symbolIncomplete: '-',
 				// <== here
 			});
 		} else {
-			progress.render(completed++);
+			progress.update(completed++);
 		}
 
 		setTimeout(function () {

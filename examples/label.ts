@@ -1,26 +1,25 @@
 import Progress from '../mod.ts';
 
+const label = 'progress:';
 const goal = 100;
 
 const progress = new Progress({
-	goal,
-	// ==> here
-	symbolComplete: '=',
-	symbolIncomplete: '-',
+	// here ==>
+	label,
 	// <== here
-	completeTemplate: ':percent :label',
+	goal,
 });
 
 let completed = 0;
 
-function run() {
+function downloading() {
 	if (completed <= goal) {
 		progress.update(completed++);
 
 		setTimeout(function () {
-			run();
+			downloading();
 		}, 50);
 	}
 }
 
-run();
+downloading();
