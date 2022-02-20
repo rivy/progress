@@ -140,6 +140,16 @@ export default class Progress {
 				.format(age / 1000),
 		);
 
+		const eta = sprintf(
+			'%ss',
+			new Intl.NumberFormat(undefined, {
+				minimumIntegerDigits: 1,
+				minimumFractionDigits: 1,
+				maximumFractionDigits: 1,
+			})
+				.format((goal - value) / (value / (age / 1000))),
+		);
+
 		const percent = sprintf(
 			'%3s%%',
 			new Intl.NumberFormat(undefined, {
@@ -150,14 +160,26 @@ export default class Progress {
 				.format((value / goal) * 100),
 		);
 
-		// :title :elapsed :goal :percent :value
+		const rate = sprintf(
+			'%s/s',
+			new Intl.NumberFormat(undefined, {
+				minimumIntegerDigits: 1,
+				minimumFractionDigits: 2,
+				maximumFractionDigits: 2,
+			})
+				.format(value / (age / 1000)),
+		);
+
+		// :title :elapsed :eta :goal :percent :rate :value
 		const title = options.title ?? this.title;
 		let text = this
 			.progressTemplate
 			.replace(/:title(\s?)/, title.length ? (title + '$1') : '')
 			.replace(':elapsed', elapsed)
+			.replace(':eta', eta)
 			.replace(':goal', goal + '')
 			.replace(':percent', percent)
+			.replace(':rate', rate)
 			.replace(':value', value + '');
 
 		// compute the available space (non-zero) for the bar
