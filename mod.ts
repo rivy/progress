@@ -85,7 +85,7 @@ export default class Progress {
 			clearOnComplete = false,
 			minInterval = 16,
 			progressTemplate,
-			writer = Deno.stdout,
+			writer = Deno.stderr,
 		}: constructorOptions = {},
 	) {
 		this.title = title;
