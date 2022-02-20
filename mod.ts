@@ -3,6 +3,9 @@ export { MultiProgressBar } from './multi.ts';
 
 const isWinOS = Deno.build.os === 'windows';
 
+// ANSI CSI sequences; ref: <https://en.wikipedia.org/wiki/ANSI_escape_code> @@ <https://archive.is/CUtrX>
+const ansiCSI = { showCursor: '\x1b[?25h', hideCursor: '\x1b[?25l', clearEOL: '\x1b[0K' };
+
 type ConsoleSize = { columns: number; rows: number };
 function ttySize(rid = Deno.stdout.rid) {
 	const denoConsoleSize = (Deno as any).consoleSize as (rid: number) => ConsoleSize | undefined;
@@ -14,12 +17,6 @@ function ttySize(rid = Deno.stdout.rid) {
 		size = undefined;
 	}
 	return size;
-}
-
-const enum Direction {
-	left,
-	right,
-	all,
 }
 
 interface constructorOptions {
@@ -202,8 +199,7 @@ export default class Progress {
 	end(): void {
 		this.isCompleted = true;
 		if (this.clearOnComplete) {
-			this.#writeRaw('\r');
-			this.#clearLine();
+			this.#write();
 		} else {
 			this.#toNextLine();
 		}
@@ -216,15 +212,15 @@ export default class Progress {
 	 * @param message The message to write
 	 */
 	log(message: string | number): void {
-		this.#clearLine();
+		this.#hideCursor();
 		this.#write(`${message}`);
 		this.#toNextLine();
 		this.#write(this.priorUpdateText);
+		this.#showCursor();
 	}
 
-	#write(msg: string): void {
-		msg = `\r${msg}\x1b[?25l`;
-		this.#writeRaw(msg);
+	#write(msg?: string): void {
+		this.#writeRaw(`\r${msg ?? ''}${ansiCSI.clearEOL}`);
 	}
 
 	#writeRaw(msg: string) {
@@ -235,21 +231,11 @@ export default class Progress {
 		this.#writeRaw('\r\n');
 	}
 
-	#clearLine(direction: Direction = Direction.all): void {
-		switch (direction) {
-			case Direction.all:
-				this.#writeRaw('\x1b[2K');
-				break;
-			case Direction.left:
-				this.#writeRaw('\x1b[1K');
-				break;
-			case Direction.right:
-				this.#writeRaw('\x1b[0K');
-				break;
-		}
+	#hideCursor(): void {
+		this.#writeRaw(`${ansiCSI.hideCursor}`);
 	}
 
 	#showCursor(): void {
-		this.#writeRaw('\x1b[?25h');
+		this.#writeRaw(`${ansiCSI.showCursor}`);
 	}
 }
