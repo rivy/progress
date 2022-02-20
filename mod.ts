@@ -149,9 +149,10 @@ export default class Progress {
 		);
 
 		// :title :age :goal :percent :value
+		const title = options.title ?? this.title;
 		let text = this
 			.progressTemplate
-			.replace(':title', options.title ?? this.title)
+			.replace(/:title(\s?)/, title.length ? (title + '$1') : '')
 			.replace(':age', this.age)
 			.replace(':goal', goal + '')
 			.replace(':percent', percent)
