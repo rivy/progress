@@ -1,25 +1,24 @@
 import Progress from '../mod.ts';
 
-const title = 'progress:';
 const goal = 100;
 
 const progress = new Progress({
-	// here ==>
-	title,
-	// <== here
 	goal,
+	// ==> here
+	clearOnComplete: true,
+	// <== here
 });
 
 let completed = 0;
 
-function downloading() {
+function run() {
 	if (completed <= goal) {
 		progress.update(completed++);
 
 		setTimeout(function () {
-			downloading();
+			run();
 		}, 50);
 	}
 }
 
-downloading();
+run();

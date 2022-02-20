@@ -1,13 +1,13 @@
 import { bgWhite, green } from 'https://deno.land/std@0.74.0/fmt/colors.ts';
-import ProgressBar from '../mod.ts';
+import Progress from '../mod.ts';
 
-const total = 100;
+const goal = 100;
 
-const progress = new ProgressBar({
-	total,
+const progress = new Progress({
+	goal,
 	// Note: on Windows, if UTF-8 is not the default encoding for the terminal, such characters will not be displayed as expected.
 	// ==> here
-	preciseBar: [
+	symbolIntermediate: [
 		bgWhite(green('▏')),
 		bgWhite(green('▎')),
 		bgWhite(green('▍')),
@@ -22,8 +22,8 @@ const progress = new ProgressBar({
 let completed = 0;
 
 function downloading() {
-	if (completed <= total) {
-		progress.render(completed++);
+	if (completed <= goal) {
+		progress.update(completed++);
 
 		setTimeout(function () {
 			downloading();
