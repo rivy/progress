@@ -28,39 +28,39 @@ deno run --unstable ./examples/width.unstable.ts
 - example
 
 ```ts
-import { MultiProgressBar } from "https://deno.land/x/progress@v1.2.4/mod.ts";
+import { MultiProgressBar } from 'https://deno.land/x/progress@v1.2.4/mod.ts';
 
-const title = "download files";
+const title = 'download files';
 const total = 100;
 
 const bars = new MultiProgressBar({
-  title,
-  // clear: true,
-  complete: "=",
-  incomplete: "-",
-  display: "[:bar] :text :percent :time :completed/:total",
+	title,
+	// clear: true,
+	complete: '=',
+	incomplete: '-',
+	display: '[:bar] :text :percent :time :completed/:total',
 });
 
 let completed1 = 0;
 let completed2 = 0;
 
 function downloading() {
-  if (completed1 <= total || completed2 <= total) {
-    completed1 += 1;
-    completed2 += 2;
-    bars.render([{
-      completed: completed1,
-      total,
-      text: "file1",
-      // You can also change the style of the progress bar
-      // complete: "*",
-      // incomplete: ".",
-    }, { completed: completed2, total, text: "file2" }]);
+	if (completed1 <= total || completed2 <= total) {
+		completed1 += 1;
+		completed2 += 2;
+		bars.render([{
+			completed: completed1,
+			total,
+			text: 'file1',
+			// You can also change the style of the progress bar
+			// complete: "*",
+			// incomplete: ".",
+		}, { completed: completed2, total, text: 'file2' }]);
 
-    setTimeout(function () {
-      downloading();
-    }, 100);
-  }
+		setTimeout(function () {
+			downloading();
+		}, 100);
+	}
 }
 
 downloading();
@@ -70,59 +70,59 @@ downloading();
 
 ```ts
 interface constructorOptions {
-  title?: string;
-  width?: number;
-  complete?: string;
-  incomplete?: string;
-  clear?: boolean;
-  interval?: number;
-  display?: string;
+	title?: string;
+	width?: number;
+	complete?: string;
+	incomplete?: string;
+	clear?: boolean;
+	interval?: number;
+	display?: string;
 }
 interface renderOptions {
-  completed: number;
-  text?: string;
-  total?: number;
-  complete?: string;
-  incomplete?: string;
+	completed: number;
+	text?: string;
+	total?: number;
+	complete?: string;
+	incomplete?: string;
 }
 class MultiProgressBar {
-  /**
-   * Title, total, complete, incomplete, can also be set or changed in the render method
-   *
-   * @param title Progress bar title, default: ''
-   * @param width the displayed width of the progress, default: 50
-   * @param complete completion character, default: colors.bgGreen(' '), can use any string
-   * @param incomplete incomplete character, default: colors.bgWhite(' '), can use any string
-   * @param clear  clear the bar on completion, default: false
-   * @param interval  minimum time between updates in milliseconds, default: 16
-   * @param display  What is displayed and display order, default: ':bar :text :percent :time :completed/:total'
-   */
-  constructor(optopns: ConstructorOptions);
+	/**
+	 * Title, total, complete, incomplete, can also be set or changed in the render method
+	 *
+	 * @param title Progress bar title, default: ''
+	 * @param width the displayed width of the progress, default: 50
+	 * @param complete completion character, default: colors.bgGreen(' '), can use any string
+	 * @param incomplete incomplete character, default: colors.bgWhite(' '), can use any string
+	 * @param clear  clear the bar on completion, default: false
+	 * @param interval  minimum time between updates in milliseconds, default: 16
+	 * @param display  What is displayed and display order, default: ':bar :text :percent :time :completed/:total'
+	 */
+	constructor(optopns: ConstructorOptions);
 
-  /**
-   * "render" the progress bar
-   *
-   * - `bars` progress bars
-   *   - `completed` completed value
-   *   - `total` optional, total number of ticks to complete, default: 100
-   *   - `text` optional, text displayed per ProgressBar, default: ''
-   *   - `complete` - optional, completion character
-   *   - `incomplete` - optional, incomplete character
-   */
-  render(bars: Array<renderOptions>): void;
+	/**
+	 * "render" the progress bar
+	 *
+	 * - `bars` progress bars
+	 *   - `completed` completed value
+	 *   - `total` optional, total number of ticks to complete, default: 100
+	 *   - `text` optional, text displayed per ProgressBar, default: ''
+	 *   - `complete` - optional, completion character
+	 *   - `incomplete` - optional, incomplete character
+	 */
+	render(bars: Array<renderOptions>): void;
 
-  /**
-   * console: interrupt the progress bar and write a message above it
-   *
-   * @param message The message to write
-   */
-  console(message: string): void;
+	/**
+	 * console: interrupt the progress bar and write a message above it
+	 *
+	 * @param message The message to write
+	 */
+	console(message: string): void;
 
-  /**
-   * end: end a progress bar.
-   * No need to call in most cases, unless you want to end before 100%
-   */
-  end(): void;
+	/**
+	 * end: end a progress bar.
+	 * No need to call in most cases, unless you want to end before 100%
+	 */
+	end(): void;
 }
 ```
 
@@ -131,20 +131,20 @@ class MultiProgressBar {
 - simple example
 
 ```ts
-import ProgressBar from "https://deno.land/x/progress@v1.2.4/mod.ts";
+import ProgressBar from 'https://deno.land/x/progress@v1.2.4/mod.ts';
 
-const title = "downloading:";
+const title = 'downloading:';
 const total = 100;
 const progress = new ProgressBar({ title, total });
 let completed = 0;
 function downloading() {
-  if (completed <= total) {
-    progress.render(completed++);
+	if (completed <= total) {
+		progress.render(completed++);
 
-    setTimeout(function () {
-      downloading();
-    }, 100);
-  }
+		setTimeout(function () {
+			downloading();
+		}, 100);
+	}
 }
 downloading();
 ```
@@ -152,30 +152,30 @@ downloading();
 - complex example
 
 ```ts
-import ProgressBar from "https://deno.land/x/progress@v1.2.4/mod.ts";
+import ProgressBar from 'https://deno.land/x/progress@v1.2.4/mod.ts';
 
 const total = 100;
 const progress = new ProgressBar({
-  total,
-  complete: "=",
-  incomplete: "-",
-  display: ":completed/:total hello :time [:bar] :percent",
-  // or =>
-  // display: ':bar'
-  // display: ':bar :time'
-  // display: '[:bar]'
-  // display: 'hello :bar world'
-  // ...
+	total,
+	complete: '=',
+	incomplete: '-',
+	display: ':completed/:total hello :time [:bar] :percent',
+	// or =>
+	// display: ':bar'
+	// display: ':bar :time'
+	// display: '[:bar]'
+	// display: 'hello :bar world'
+	// ...
 });
 let completed = 0;
 function run() {
-  if (completed <= total) {
-    progress.render(completed++);
+	if (completed <= total) {
+		progress.render(completed++);
 
-    setTimeout(function () {
-      run();
-    }, 100);
-  }
+		setTimeout(function () {
+			run();
+		}, 100);
+	}
 }
 run();
 ```

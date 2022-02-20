@@ -1,23 +1,23 @@
 {
-  "compilerOptions": {
-    "allowJs": true,
-    "module": "esnext",
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "target": "esnext",
-    "isolatedModules": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
-  },
-  "exclude": ["vendor"],
-  // * `deno fmt` options (usable for Deno v1.14+)
-  "fmt": {
-    "options": {
-      "useTabs": true,
-      "lineWidth": 100,
-      "indentWidth": 2,
-      "singleQuote": true,
-      "proseWrap": "preserve"
-    }
-  }
+	"compilerOptions": {
+		"allowJs": true,
+		"module": "esnext",
+		"moduleResolution": "node",
+		"resolveJsonModule": true,
+		"target": "esnext",
+		"isolatedModules": true,
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true
+	},
+	"exclude": ["vendor"],
+	// * `deno fmt` options (usable for Deno v1.14+)
+	"fmt": {
+		"options": {
+			"useTabs": true,
+			"lineWidth": 100,
+			"indentWidth": 2,
+			"singleQuote": true,
+			"proseWrap": "preserve"
+		}
+	}
 }
