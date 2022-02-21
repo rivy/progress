@@ -216,14 +216,14 @@ export default class Progress {
 			this.priorUpdateText = text;
 		}
 
-		if (finished) this.end();
+		if (finished) this.complete();
 	}
 
 	/**
-	 * end: end a progress bar.
-	 * No need to call in most cases, unless you want to end before 100%
+	 * complete(): finish progress bar
+	 * * no need to call unless you want completion to occur before goal is attained
 	 */
-	end(): void {
+	complete(): void {
 		this.isCompleted = true;
 		if (this.clearOnComplete) {
 			this.#write();
