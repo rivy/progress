@@ -31,6 +31,7 @@ interface constructorOptions {
 	clearOnComplete?: boolean;
 	minInterval?: number;
 	progressTemplate?: string;
+	completeTemplate?: string;
 	writer?: Deno.WriterSync & { rid: number };
 }
 
@@ -52,6 +53,7 @@ export default class Progress {
 	clearOnComplete: boolean;
 	minInterval: number;
 	progressTemplate: string;
+	completeTemplate?: string;
 	writer: Deno.WriterSync & { rid: number };
 	ttyColumns: number;
 	isTTY: boolean;
@@ -59,7 +61,11 @@ export default class Progress {
 	private isCompleted = false;
 	private startTime = Date.now();
 	private priorUpdateText = '';
+	private priorUpdateTick = 0;
 	private priorUpdateTime = 0;
+
+	private defaultGoal = 100;
+	private defaultMaxLength = 100;
 
 	private encoder = new TextEncoder();
 
@@ -73,7 +79,8 @@ export default class Progress {
 	 * @param symbolIncomplete incomplete symbol, default: colors.bgWhite(' ')
 	 * @param clearOnComplete  clear the bar on completion, default: false
 	 * @param minInterval  minimum time between updates in milliseconds, default: 16
-	 * @param progressTemplate  What is displayed and display order, default: ':label :percent :bar :elapsed :value/:goal'
+	 * @param progressTemplate - template for progress display; default: ':label :percent :bar :elapsed :value/:goal'
+	 * @param completeTemplate - template for complete message display; default: undefined
 	 */
 	constructor(
 		{
@@ -86,6 +93,7 @@ export default class Progress {
 			clearOnComplete = false,
 			minInterval = 16,
 			progressTemplate,
+			completeTemplate,
 			writer = Deno.stderr,
 		}: constructorOptions = {},
 	) {
@@ -98,9 +106,10 @@ export default class Progress {
 		this.clearOnComplete = clearOnComplete;
 		this.minInterval = minInterval;
 		this.progressTemplate = progressTemplate ?? ':label :percent :bar :elapsed :value/:goal';
+		this.completeTemplate = completeTemplate;
 		this.writer = writer;
 		this.isTTY = Deno.isatty(writer.rid);
-		this.ttyColumns = ttySize(writer.rid)?.columns ?? 100;
+		this.ttyColumns = ttySize(writer.rid)?.columns ?? this.defaultMaxLength;
 	}
 
 	/**
@@ -114,92 +123,46 @@ export default class Progress {
 	 *   - `symbolIncomplete` - incomplete symbol
 	 *   - `symbolIntermediate` - intermediate symbols
 	 */
-	update(value: number, options: updateOptions = {}): void {
+	update(tick: number, options: updateOptions = {}): void {
 		if (this.isCompleted || !this.isTTY) return;
 
-		if (value < 0) {
-			throw new Error(`progress: value must be greater than or equal to 0`);
+		if (tick < 0) {
+			throw new Error('progress: `tick` value must be greater than or equal to 0');
 		}
 
-		const goal = options.goal ?? this.goal ?? 100;
+		this.goal = options.goal ?? this.goal ?? this.defaultGoal;
+		this.label = options.label ?? this.label;
+
+		const goal = this.goal;
+
 		const now = Date.now();
 		const msUpdateInterval = now - this.priorUpdateTime;
-		if (msUpdateInterval < this.minInterval && value < goal) return;
+		if (msUpdateInterval < this.minInterval && tick < goal) return;
 
+		this.priorUpdateTick = tick;
 		this.priorUpdateTime = now;
 
-		const age = now - this.startTime; // ms
-
-		const elapsed = sprintf(
-			'%ss',
-			new Intl.NumberFormat(undefined, {
-				minimumIntegerDigits: 1,
-				minimumFractionDigits: 1,
-				maximumFractionDigits: 1,
-			})
-				.format(age / 1000),
-		);
-
-		const eta = sprintf(
-			'%ss',
-			new Intl.NumberFormat(undefined, {
-				minimumIntegerDigits: 1,
-				minimumFractionDigits: 1,
-				maximumFractionDigits: 1,
-			})
-				.format((goal - value) / (value / (age / 1000))),
-		);
-
-		const percent = sprintf(
-			'%3s%%',
-			new Intl.NumberFormat(undefined, {
-				minimumIntegerDigits: 1,
-				minimumFractionDigits: 0,
-				maximumFractionDigits: 0,
-			})
-				.format((value / goal) * 100),
-		);
-
-		const rate = sprintf(
-			'%s/s',
-			new Intl.NumberFormat(undefined, {
-				minimumIntegerDigits: 1,
-				minimumFractionDigits: 2,
-				maximumFractionDigits: 2,
-			})
-				.format(value / (age / 1000)),
-		);
-
-		// :label :elapsed :eta :goal :percent :rate :value
-		const label = options.label ?? this.label;
-		let text = this
-			.progressTemplate
-			.replace(/:label(\s?)/, label.length ? (label + '$1') : '')
-			.replace(':elapsed', elapsed)
-			.replace(':eta', eta)
-			.replace(':goal', goal + '')
-			.replace(':percent', percent)
-			.replace(':rate', rate)
-			.replace(':value', value + '');
+		// expand template (for :label :elapsed :eta :goal :percent :rate :tick :value)
+		let text = this.#expandTemplate(this.progressTemplate, this.#templateVars({ tick }));
 
 		// compute the available space (non-zero) for the bar
 		let availableSpace = Math.max(0, this.ttyColumns - text.replace(':bar', '').length);
 		if (availableSpace && isWinOS) availableSpace -= 1;
 
 		const width = Math.min(this.progressBarWidth, availableSpace);
-		const finished = value >= goal;
+		const finished = tick >= goal;
 
-		const preciseBar = options.symbolIntermediate ?? this.symbolIntermediate;
-		const precision = preciseBar.length > 1;
+		const partialSymbols = options.symbolIntermediate ?? this.symbolIntermediate;
+		const precision = partialSymbols.length > 1;
 
 		// :bar
-		const completeLength = width * value / goal;
+		const completeLength = width * tick / goal;
 		const roundedCompleteLength = Math.floor(completeLength);
 
 		let precise = '';
 		if (precision) {
 			const preciseLength = completeLength - roundedCompleteLength;
-			precise = finished ? '' : preciseBar[Math.floor(preciseBar.length * preciseLength)];
+			precise = finished ? '' : partialSymbols[Math.floor(partialSymbols.length * preciseLength)];
 		}
 
 		const complete = new Array(roundedCompleteLength)
@@ -216,19 +179,24 @@ export default class Progress {
 			this.priorUpdateText = text;
 		}
 
-		if (finished) this.end();
+		if (finished) this.complete(this.completeTemplate);
 	}
 
 	/**
-	 * end: end a progress bar.
-	 * No need to call in most cases, unless you want to end before 100%
+	 * `complete()` - finish a progress bar
+	 * * no need to call in most cases, unless you want to complete/end before 100%
 	 */
-	end(): void {
+	complete(msgTemplate?: string): void {
 		this.isCompleted = true;
-		if (this.clearOnComplete) {
+		if (this.clearOnComplete || (msgTemplate != undefined)) {
 			this.#write();
 		} else {
 			this.#toNextLine();
+		}
+		if (msgTemplate != undefined) {
+			this.#write(
+				this.#expandTemplate(msgTemplate, this.#templateVars({ tick: this.priorUpdateTick })),
+			);
 		}
 		this.#showCursor();
 	}
@@ -244,6 +212,72 @@ export default class Progress {
 		this.#toNextLine();
 		this.#write(this.priorUpdateText);
 		this.#showCursor();
+	}
+
+	#expandTemplate(template: string, vars: Record<string, string | number>) {
+		return template
+			.replace(/:label(\s?)/, vars.label ? (vars.label.toLocaleString() + '$1') : '')
+			.replace(':elapsed', vars.elapsed ? vars.elapsed.toLocaleString() : '')
+			.replace(':eta', vars.eta ? vars.eta.toLocaleString() : '')
+			.replace(':goal', vars.goal ? vars.goal.toLocaleString() : '')
+			.replace(
+				':percent',
+				vars.percent
+					? vars.percent.toLocaleString()
+					: '',
+			)
+			.replace(':rate', vars.rate ? vars.rate.toLocaleString() : '')
+			.replace(':tick', vars.tick ? vars.tick.toLocaleString() : '')
+			.replace(':value', vars.tick ? vars.tick.toLocaleString() : '');
+	}
+
+	#templateVars(inputs_: { label?: string; tick: number; goal?: number }) {
+		const inputs = { goal: this.defaultGoal, ...inputs_ };
+		const goal = inputs.goal;
+		const tick = inputs.tick;
+		const now = Date.now();
+		const age /* ms */ = now - this.startTime;
+		const elapsed /* secs */ = sprintf(
+			'%ss',
+			new Intl.NumberFormat(undefined, {
+				minimumIntegerDigits: 1,
+				minimumFractionDigits: 1,
+				maximumFractionDigits: 1,
+			})
+				.format(age /* ms */ / 1000),
+		);
+
+		const eta /* secs */ = sprintf(
+			'%ss',
+			new Intl.NumberFormat(undefined, {
+				minimumIntegerDigits: 1,
+				minimumFractionDigits: 1,
+				maximumFractionDigits: 1,
+			})
+				.format((goal - tick) / (tick / (age /* ms */ / 1000))),
+		);
+
+		const percent = sprintf(
+			'%3s%%',
+			new Intl.NumberFormat(undefined, {
+				minimumIntegerDigits: 1,
+				minimumFractionDigits: 0,
+				maximumFractionDigits: 0,
+			})
+				.format((tick / goal) * 100),
+		);
+
+		const rate = sprintf(
+			'%s/s',
+			new Intl.NumberFormat(undefined, {
+				minimumIntegerDigits: 1,
+				minimumFractionDigits: 2,
+				maximumFractionDigits: 2,
+			})
+				.format(tick / (age /* ms */ / 1000)),
+		);
+
+		return { age, elapsed, eta, goal, now, percent, rate, tick, value: tick };
 	}
 
 	#write(msg?: string): void {
