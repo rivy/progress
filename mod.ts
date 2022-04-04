@@ -117,8 +117,8 @@ export default class Progress {
 	update(value: number, options: updateOptions = {}): void {
 		if (this.isCompleted || !this.isTTY) return;
 
-		if (value < 0) {
-			throw new Error(`progress: value must be greater than or equal to 0`);
+		if ((isNaN(value)) || (value < 0)) {
+			throw new Error(`progress: value must be a number, greater than or equal to 0`);
 		}
 
 		const goal = options.goal ?? this.goal ?? 100;
