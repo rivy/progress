@@ -69,6 +69,36 @@ function netshOutputToMaps(output?: string) {
 // ref: <https://github.com/dorssel/usbipd-win>
 // ref: <https://www.google.com/search?q=windows+wsl+wireless+info&oq=windows+wsl+wireless+info>
 
+function dBmFromQuality(signalQuality: number) {
+	return (signalQuality / 2) - 100;
+}
+// function qualityFromDBM(signalDBM: number) {
+// 	return (signalDBM + 100) * 2;
+// }
+
+const qualityLevels = [
+	{
+		dBm: -50,
+		quality: 'excellent',
+		signal: Colors.bgGreen(' '),
+		background: Colors.bgWhite(' '),
+	},
+	{ dBm: -60, quality: 'good', signal: Colors.bgGreen(' '), background: Colors.bgWhite(' ') },
+	{
+		dBm: -67,
+		quality: 'reliable',
+		signal: Colors.bgCyan(' '),
+		background: Colors.bgWhite(' '),
+	},
+	{ dBm: -70, quality: 'weak', signal: Colors.bgMagenta(' '), background: Colors.bgYellow(' ') },
+	{ dBm: -80, quality: 'unreliable', signal: Colors.bgRed(' '), background: Colors.bgYellow(' ') },
+	{ dBm: -90, quality: 'bad', signal: Colors.bgBrightRed(' '), background: Colors.bgMagenta(' ') },
+];
+
+function qualityLevelInfo(dBm: number) {
+	return qualityLevels.find((e) => dBm >= e.dBm) ?? qualityLevels[qualityLevels.length - 1];
+}
+
 const nReadings = 10;
 const arr: Map<string, string>[] = [];
 const goal = 100;
@@ -82,37 +112,8 @@ for (let index = 0; index < nReadings; index++) {
 	// console.warn({ wifiInterfaceData });
 	wifiInterfaceData?.forEach((e) => arr.push(e));
 	const signalQuality = Number(wifiInterfaceData?.[0].get('Signal')?.match(/\d+/));
-	const dBm = (signalQuality / 2) - 100;
-	const qualityLevels = [
-		{
-			dBm: -50,
-			quality: 'excellent',
-			signal: Colors.bgGreen(' '),
-			background: Colors.bgWhite(' '),
-		},
-		{ dBm: -60, quality: 'good', signal: Colors.bgGreen(' '), background: Colors.bgWhite(' ') },
-		{
-			dBm: -67,
-			quality: 'reliable',
-			signal: Colors.bgCyan(' '),
-			background: Colors.bgWhite(' '),
-		},
-		{ dBm: -70, quality: 'weak', signal: Colors.bgMagenta(' '), background: Colors.bgYellow(' ') },
-		{
-			dBm: -80,
-			quality: 'unreliable',
-			signal: Colors.bgRed(' '),
-			background: Colors.bgYellow(' '),
-		},
-		{
-			dBm: -90,
-			quality: 'bad',
-			signal: Colors.bgBrightRed(' '),
-			background: Colors.bgMagenta(' '),
-		},
-	];
-	const qualityLevel = qualityLevels.find((e) => dBm >= e.dBm) ??
-		qualityLevels[qualityLevels.length - 1];
+	const dBm = dBmFromQuality(signalQuality);
+	const qualityLevel = qualityLevelInfo(dBm);
 	progress.update(signalQuality, {
 		label: `${wifiInterfaceData?.[0].get('@')}:${wifiInterfaceData?.[0].get('Name')}:${dBm}`,
 		symbolComplete: qualityLevel.signal,

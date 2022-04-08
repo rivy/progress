@@ -24,13 +24,16 @@ function ttySize(rid = Deno.stdout.rid) {
 interface constructorOptions {
 	label?: string;
 	goal?: number;
-	progressBarWidth?: number;
+	maxBarWidth?: number;
 	symbolComplete?: string;
 	symbolIncomplete?: string;
 	symbolIntermediate?: string[];
 	clearOnComplete?: boolean;
-	minInterval?: number;
 	progressTemplate?: string;
+	//
+	maxWidth?: number;
+	minInterval?: number;
+	title?: string;
 	writer?: Deno.WriterSync & { rid: number };
 }
 
@@ -68,18 +71,18 @@ export default class Progress {
 	 *
 	 * @param label Progress bar label, default: ''
 	 * @param goal total number of ticks to complete,
-	 * @param progressBarWidth the displayed width of the progress, default: 50
+	 * @param progressBarWidth the displayed width of the progress, default: 50 characters
 	 * @param symbolComplete completion symbol, default: colors.bgGreen(' ')
 	 * @param symbolIncomplete incomplete symbol, default: colors.bgWhite(' ')
 	 * @param clearOnComplete  clear the bar on completion, default: false
-	 * @param minInterval  minimum time between updates in milliseconds, default: 16
+	 * @param minInterval  minimum time between updates in milliseconds, default: 16 ms
 	 * @param progressTemplate  What is displayed and display order, default: ':label :percent :bar :elapsed :value/:goal'
 	 */
 	constructor(
 		{
 			label = '',
 			goal,
-			progressBarWidth = 50,
+			maxBarWidth = 50,
 			symbolComplete = bgGreen(' '),
 			symbolIncomplete = bgWhite(' '),
 			symbolIntermediate = [],
@@ -91,7 +94,7 @@ export default class Progress {
 	) {
 		this.label = label;
 		this.goal = goal;
-		this.progressBarWidth = progressBarWidth;
+		this.progressBarWidth = maxBarWidth;
 		this.symbolComplete = symbolComplete;
 		this.symbolIntermediate = symbolIntermediate.concat(symbolComplete);
 		this.symbolIncomplete = symbolIncomplete;
@@ -118,7 +121,7 @@ export default class Progress {
 		if (this.isCompleted || !this.isTTY) return;
 
 		if ((isNaN(value)) || (value < 0)) {
-			throw new Error(`progress: value must be a number, greater than or equal to 0`);
+			throw new Error(`progress: value must be a number which is greater than or equal to 0`);
 		}
 
 		const goal = options.goal ?? this.goal ?? 100;
@@ -128,10 +131,10 @@ export default class Progress {
 
 		this.priorUpdateTime = now;
 
-		const age = now - this.startTime; // ms
+		const age = now - this.startTime; // (in ms)
 
 		const elapsed = sprintf(
-			'%ss',
+			'%ss', /* in seconds */
 			new Intl.NumberFormat(undefined, {
 				minimumIntegerDigits: 1,
 				minimumFractionDigits: 1,
@@ -141,7 +144,7 @@ export default class Progress {
 		);
 
 		const eta = sprintf(
-			'%ss',
+			'%ss', /* in seconds */
 			new Intl.NumberFormat(undefined, {
 				minimumIntegerDigits: 1,
 				minimumFractionDigits: 1,
@@ -161,7 +164,7 @@ export default class Progress {
 		);
 
 		const rate = sprintf(
-			'%s/s',
+			'%s/s', /* per second */
 			new Intl.NumberFormat(undefined, {
 				minimumIntegerDigits: 1,
 				minimumFractionDigits: 2,
