@@ -33,7 +33,7 @@ interface constructorOptions {
 	progressTemplate?: string;
 	//
 	maxWidth?: number;
-	minInterval?: number;
+	minRenderInterval?: number;
 	title?: string;
 	writer?: Deno.WriterSync & { rid: number };
 }
@@ -55,7 +55,7 @@ export default class Progress {
 	symbolIntermediate: string[];
 	autoComplete: boolean;
 	clearOnComplete: boolean;
-	minInterval: number;
+	minRenderInterval: number;
 	progressTemplate: string;
 	writer: Deno.WriterSync & { rid: number };
 	ttyColumns: number;
@@ -78,7 +78,7 @@ export default class Progress {
 	 * @param symbolIncomplete incomplete symbol, default: colors.bgWhite(' ')
 	 * @param autoComplete automatically `complete()` when goal is reached, default: true
 	 * @param clearOnComplete  clear the bar on completion, default: false
-	 * @param minInterval  minimum time between updates in milliseconds, default: 16 ms
+	 * @param minRenderInterval  minimum time between updates in milliseconds, default: 16 ms
 	 * @param progressTemplate  What is displayed and display order, default: ':label :percent :bar :elapsed :value/:goal'
 	 */
 	constructor(
@@ -91,7 +91,7 @@ export default class Progress {
 			symbolIntermediate = [],
 			autoComplete = true,
 			clearOnComplete = false,
-			minInterval = 16,
+			minRenderInterval = 16,
 			progressTemplate,
 			writer = Deno.stderr,
 		}: constructorOptions = {},
@@ -104,7 +104,7 @@ export default class Progress {
 		this.symbolIncomplete = symbolIncomplete;
 		this.autoComplete = autoComplete;
 		this.clearOnComplete = clearOnComplete;
-		this.minInterval = minInterval;
+		this.minRenderInterval = minRenderInterval;
 		this.progressTemplate = progressTemplate ?? ':label :percent :bar :elapsed :value/:goal';
 		this.writer = writer;
 		this.isTTY = Deno.isatty(writer.rid);
@@ -132,7 +132,7 @@ export default class Progress {
 		const goal = options.goal ?? this.goal ?? 100;
 		const now = Date.now();
 		const msUpdateInterval = now - this.priorUpdateTime;
-		if (msUpdateInterval < this.minInterval && value < goal) return;
+		if (msUpdateInterval < this.minRenderInterval && value < goal) return;
 
 		this.priorUpdateTime = now;
 
