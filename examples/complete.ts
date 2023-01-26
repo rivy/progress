@@ -8,7 +8,7 @@ const progress = new Progress({
 	symbolComplete: '=',
 	symbolIncomplete: '-',
 	// <== here
-	completeTemplate: ':percent :label',
+	// ToDO: completeTemplate: ':percent :label',
 });
 
 let completed = 0;
