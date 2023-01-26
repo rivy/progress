@@ -28,6 +28,7 @@ interface constructorOptions {
 	symbolComplete?: string;
 	symbolIncomplete?: string;
 	symbolIntermediate?: string[];
+	autoComplete?: boolean;
 	clearOnComplete?: boolean;
 	progressTemplate?: string;
 	//
@@ -52,6 +53,7 @@ export default class Progress {
 	symbolComplete: string;
 	symbolIncomplete: string;
 	symbolIntermediate: string[];
+	autoComplete: boolean;
 	clearOnComplete: boolean;
 	minInterval: number;
 	progressTemplate: string;
@@ -74,6 +76,7 @@ export default class Progress {
 	 * @param progressBarWidth the displayed width of the progress, default: 50 characters
 	 * @param symbolComplete completion symbol, default: colors.bgGreen(' ')
 	 * @param symbolIncomplete incomplete symbol, default: colors.bgWhite(' ')
+	 * @param autoComplete automatically `complete()` when goal is reached, default: true
 	 * @param clearOnComplete  clear the bar on completion, default: false
 	 * @param minInterval  minimum time between updates in milliseconds, default: 16 ms
 	 * @param progressTemplate  What is displayed and display order, default: ':label :percent :bar :elapsed :value/:goal'
@@ -86,6 +89,7 @@ export default class Progress {
 			symbolComplete = bgGreen(' '),
 			symbolIncomplete = bgWhite(' '),
 			symbolIntermediate = [],
+			autoComplete = true,
 			clearOnComplete = false,
 			minInterval = 16,
 			progressTemplate,
@@ -98,6 +102,7 @@ export default class Progress {
 		this.symbolComplete = symbolComplete;
 		this.symbolIntermediate = symbolIntermediate.concat(symbolComplete);
 		this.symbolIncomplete = symbolIncomplete;
+		this.autoComplete = autoComplete;
 		this.clearOnComplete = clearOnComplete;
 		this.minInterval = minInterval;
 		this.progressTemplate = progressTemplate ?? ':label :percent :bar :elapsed :value/:goal';
@@ -219,7 +224,7 @@ export default class Progress {
 			this.priorUpdateText = text;
 		}
 
-		if (finished) this.complete();
+		if (finished && this.autoComplete) this.complete();
 	}
 
 	/**
