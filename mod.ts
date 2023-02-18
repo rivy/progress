@@ -31,6 +31,7 @@ interface constructorOptions {
 	autoComplete?: boolean;
 	clearOnComplete?: boolean;
 	progressTemplate?: string;
+	hideCursor?: boolean;
 	//
 	maxWidth?: number;
 	minRenderInterval?: number;
@@ -55,8 +56,9 @@ export default class Progress {
 	symbolIntermediate: string[];
 	autoComplete: boolean;
 	clearOnComplete: boolean;
-	minRenderInterval: number;
 	progressTemplate: string;
+	hideCursor: boolean;
+	minRenderInterval: number;
 	writer: Deno.WriterSync & { rid: number };
 	ttyColumns: number;
 	isTTY: boolean;
@@ -78,8 +80,9 @@ export default class Progress {
 	 * @param symbolIncomplete incomplete symbol, default: colors.bgWhite(' ')
 	 * @param autoComplete automatically `complete()` when goal is reached, default: true
 	 * @param clearOnComplete  clear the bar on completion, default: false
-	 * @param minRenderInterval  minimum time between updates in milliseconds, default: 16 ms
 	 * @param progressTemplate  What is displayed and display order, default: ':label :percent :bar :elapsed :value/:goal'
+	 * @param hideCursor  hide cursor until progress bar is complete, default: false
+	 * @param minRenderInterval  minimum time between updates in milliseconds, default: 16 ms
 	 */
 	constructor(
 		{
@@ -91,8 +94,9 @@ export default class Progress {
 			symbolIntermediate = [],
 			autoComplete = true,
 			clearOnComplete = false,
-			minRenderInterval = 16,
 			progressTemplate,
+			hideCursor = false,
+			minRenderInterval = 16,
 			writer = Deno.stderr,
 		}: constructorOptions = {},
 	) {
@@ -104,8 +108,9 @@ export default class Progress {
 		this.symbolIncomplete = symbolIncomplete;
 		this.autoComplete = autoComplete;
 		this.clearOnComplete = clearOnComplete;
-		this.minRenderInterval = minRenderInterval;
 		this.progressTemplate = progressTemplate ?? ':label :percent :bar :elapsed :value/:goal';
+		this.hideCursor = hideCursor;
+		this.minRenderInterval = minRenderInterval;
 		this.writer = writer;
 		this.isTTY = Deno.isatty(writer.rid);
 		this.ttyColumns = ttySize(writer.rid)?.columns ?? 100;
@@ -235,8 +240,8 @@ export default class Progress {
 		this.isCompleted = true;
 		if (this.clearOnComplete) {
 			this.#write();
-		} else {
-			this.#toNextLine();
+			// } else {
+			// 	this.#toNextLine();
 		}
 		this.#showCursor();
 	}
@@ -247,15 +252,17 @@ export default class Progress {
 	 * @param message The message to write
 	 */
 	log(message: string | number): void {
-		this.#hideCursor();
+		if (this.hideCursor) this.#hideCursor();
 		this.#write(`${message}`);
 		this.#toNextLine();
 		this.#write(this.priorUpdateText);
-		this.#showCursor();
+		if (!this.hideCursor) this.#showCursor();
 	}
 
 	#write(msg?: string): void {
+		if (this.hideCursor) this.#hideCursor();
 		this.#writeRaw(`\r${msg ?? ''}${ansiCSI.clearEOL}`);
+		if (!this.hideCursor) this.#showCursor();
 	}
 
 	#writeRaw(msg: string) {
