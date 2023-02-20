@@ -22,17 +22,18 @@ function ttySize(rid = Deno.stdout.rid) {
 }
 
 interface constructorOptions {
-	label?: string;
+	// *default* progress line settings
 	goal?: number;
-	maxBarWidth?: number;
-	symbolComplete?: string;
-	symbolIncomplete?: string;
-	symbolIntermediate?: string[];
+	label?: string;
+	barSymbolComplete?: string;
+	barSymbolIncomplete?: string;
+	barSymbolIntermediate?: string[];
+	progressBarWidth?: number;
+	progressTemplate?: string;
 	autoComplete?: boolean;
 	clearOnComplete?: boolean;
-	progressTemplate?: string;
+	// render settings
 	hideCursor?: boolean;
-	//
 	maxWidth?: number;
 	minRenderInterval?: number;
 	title?: string;
@@ -40,23 +41,29 @@ interface constructorOptions {
 }
 
 interface updateOptions {
-	label?: string;
 	goal?: number;
-	symbolComplete?: string;
-	symbolIncomplete?: string;
-	symbolIntermediate?: string[];
+	label?: string;
+	barSymbolComplete?: string;
+	barSymbolIncomplete?: string;
+	barSymbolIntermediate?: string[];
+	progressBarWidth?: number;
+	progressTemplate?: string;
+	autoComplete?: boolean;
+	clearOnComplete?: boolean;
 }
+
+type ProgressUpdateObject = { value: number; options?: updateOptions };
 
 export default class Progress {
 	label: string;
-	goal?: number;
+	goal: number;
+	barSymbolComplete: string;
+	barSymbolIncomplete: string;
+	barSymbolIntermediate: string[];
 	progressBarWidth: number;
-	symbolComplete: string;
-	symbolIncomplete: string;
-	symbolIntermediate: string[];
+	progressTemplate: string;
 	autoComplete: boolean;
 	clearOnComplete: boolean;
-	progressTemplate: string;
 	hideCursor: boolean;
 	minRenderInterval: number;
 	writer: Deno.WriterSync & { rid: number };
@@ -71,30 +78,31 @@ export default class Progress {
 	private encoder = new TextEncoder();
 
 	/**
-	 * Label, goal, symbolComplete, symbolIncomplete, and symbolIntermediate also be changed dynamically in the update method
+	 * Goal, label, barSymbolComplete, barSymbolIncomplete, and barSymbolIntermediate also be changed dynamically in the update method
 	 *
-	 * @param label Progress bar label, default: ''
-	 * @param goal total number of ticks to complete,
-	 * @param progressBarWidth the displayed width of the progress, default: 50 characters
-	 * @param symbolComplete completion symbol, default: colors.bgGreen(' ')
-	 * @param symbolIncomplete incomplete symbol, default: colors.bgWhite(' ')
+	 * @param goal total number of ticks to complete, default: 100
+	 * @param label progress line label text, default: ''
+	 * @param barSymbolComplete completion symbol, default: colors.bgGreen(' ')
+	 * @param barSymbolIncomplete incomplete symbol, default: colors.bgWhite(' ')
+	 * @param barSymbolIntermediate incomplete symbol, default: colors.bgWhite(' ')
+	 * @param progressBarWidth the displayed width of the progress bar, default: 50 characters
+	 * @param progressTemplate  progress display line content, default: ':label :percent :bar :elapsed :value/:goal'
 	 * @param autoComplete automatically `complete()` when goal is reached, default: true
-	 * @param clearOnComplete  clear the bar on completion, default: false
-	 * @param progressTemplate  What is displayed and display order, default: ':label :percent :bar :elapsed :value/:goal'
-	 * @param hideCursor  hide cursor until progress bar is complete, default: false
+	 * @param clearOnComplete  clear the progress line on completion, default: false
+	 * @param hideCursor  hide cursor until progress line display is complete, default: false
 	 * @param minRenderInterval  minimum time between updates in milliseconds, default: 16 ms
 	 */
 	constructor(
 		{
+			goal = 100,
 			label = '',
-			goal,
-			maxBarWidth = 50,
-			symbolComplete = bgGreen(' '),
-			symbolIncomplete = bgWhite(' '),
-			symbolIntermediate = [],
+			barSymbolComplete = bgGreen(' '),
+			barSymbolIncomplete = bgWhite(' '),
+			barSymbolIntermediate = [],
+			progressBarWidth = 50,
+			progressTemplate = ':label :percent :bar :elapsed :value/:goal',
 			autoComplete = true,
 			clearOnComplete = false,
-			progressTemplate,
 			hideCursor = false,
 			minRenderInterval = 16,
 			writer = Deno.stderr,
@@ -102,18 +110,18 @@ export default class Progress {
 	) {
 		this.label = label;
 		this.goal = goal;
-		this.progressBarWidth = maxBarWidth;
-		this.symbolComplete = symbolComplete;
-		this.symbolIntermediate = symbolIntermediate.concat(symbolComplete);
-		this.symbolIncomplete = symbolIncomplete;
+		this.barSymbolComplete = barSymbolComplete;
+		this.barSymbolIntermediate = barSymbolIntermediate.concat(barSymbolComplete);
+		this.barSymbolIncomplete = barSymbolIncomplete;
 		this.autoComplete = autoComplete;
 		this.clearOnComplete = clearOnComplete;
-		this.progressTemplate = progressTemplate ?? ':label :percent :bar :elapsed :value/:goal';
+		this.progressBarWidth = progressBarWidth;
+		this.progressTemplate = progressTemplate;
 		this.hideCursor = hideCursor;
 		this.minRenderInterval = minRenderInterval;
 		this.writer = writer;
 		this.isTTY = Deno.isatty(writer.rid);
-		this.ttyColumns = ttySize(writer.rid)?.columns ?? 100;
+		this.ttyColumns = ttySize(writer.rid)?.columns ?? 80;
 	}
 
 	/**
@@ -127,17 +135,23 @@ export default class Progress {
 	 *   - `symbolIncomplete` - incomplete symbol
 	 *   - `symbolIntermediate` - intermediate symbols
 	 */
-	update(value: number, options: updateOptions = {}): void {
+	// ToDO: overload and allow...
+	// `update(number, options = {})` => update first progress line (note: two arguments)
+	// `update({ number, options? })` => (alternate form) update first progress line
+	// `update(number[])` => update first N progress lines
+	// `update({ number, options? }[])` => update first N progress lines
+	// update(v: number, options?: unknown): void;
+	update(v: number, options: updateOptions = {}): void {
 		if (this.isCompleted || !this.isTTY) return;
 
-		if ((isNaN(value)) || (value < 0)) {
+		if ((isNaN(v)) || (v < 0)) {
 			throw new Error(`progress: value must be a number which is greater than or equal to 0`);
 		}
 
-		const goal = options.goal ?? this.goal ?? 100;
+		const goal = options.goal ?? this.goal;
 		const now = Date.now();
 		const msUpdateInterval = now - this.priorUpdateTime;
-		if (msUpdateInterval < this.minRenderInterval && value < goal) return;
+		if (msUpdateInterval < this.minRenderInterval && v < goal) return;
 
 		this.priorUpdateTime = now;
 
@@ -160,7 +174,7 @@ export default class Progress {
 				minimumFractionDigits: 1,
 				maximumFractionDigits: 1,
 			})
-				.format((goal - value) / (value / (age / 1000))),
+				.format((goal - v) / (v / (age / 1000))),
 		);
 
 		const percent = sprintf(
@@ -170,7 +184,7 @@ export default class Progress {
 				minimumFractionDigits: 0,
 				maximumFractionDigits: 0,
 			})
-				.format((value / goal) * 100),
+				.format((v / goal) * 100),
 		);
 
 		const rate = sprintf(
@@ -180,33 +194,33 @@ export default class Progress {
 				minimumFractionDigits: 2,
 				maximumFractionDigits: 2,
 			})
-				.format(value / (age / 1000)),
+				.format(v / (age / 1000)),
 		);
 
 		// :label :elapsed :eta :goal :percent :rate :value
 		const label = options.label ?? this.label;
-		let text = this
-			.progressTemplate
-			.replace(/:label(\s?)/, label.length ? (label + '$1') : '')
-			.replace(':elapsed', elapsed)
-			.replace(':eta', eta)
-			.replace(':goal', goal + '')
-			.replace(':percent', percent)
-			.replace(':rate', rate)
-			.replace(':value', value + '');
+		const progressTemplate = options.progressTemplate ?? this.progressTemplate;
+		let updateText = progressTemplate
+			.replace('{elapsed}', elapsed)
+			.replace('{eta}', eta)
+			.replace('{goal}', goal + '')
+			.replace('{percent}', percent)
+			.replace('{rate}', rate)
+			.replace('{value}', v + '')
+			.replace(/{label}(\s?)/, label.length ? (label + '$1') : '');
 
 		// compute the available space (non-zero) for the bar
-		let availableSpace = Math.max(0, this.ttyColumns - text.replace(':bar', '').length);
+		let availableSpace = Math.max(0, this.ttyColumns - updateText.replace('{bar}', '').length);
 		if (availableSpace && isWinOS) availableSpace -= 1;
 
 		const width = Math.min(this.progressBarWidth, availableSpace);
-		const finished = value >= goal;
+		const finished = v >= goal;
 
-		const preciseBar = options.symbolIntermediate ?? this.symbolIntermediate;
+		const preciseBar = options.barSymbolIntermediate ?? this.barSymbolIntermediate;
 		const precision = preciseBar.length > 1;
 
 		// :bar
-		const completeLength = width * value / goal;
+		const completeLength = width * v / goal;
 		const roundedCompleteLength = Math.floor(completeLength);
 
 		let precise = '';
@@ -216,17 +230,17 @@ export default class Progress {
 		}
 
 		const complete = new Array(roundedCompleteLength)
-			.fill(options.symbolComplete ?? this.symbolComplete)
+			.fill(options.barSymbolComplete ?? this.barSymbolComplete)
 			.join('');
 		const incomplete = new Array(Math.max(width - roundedCompleteLength - (precision ? 1 : 0), 0))
-			.fill(options.symbolIncomplete ?? this.symbolIncomplete)
+			.fill(options.barSymbolIncomplete ?? this.barSymbolIncomplete)
 			.join('');
 
-		text = text.replace(':bar', complete + precise + incomplete);
+		updateText = updateText.replace('{bar}', complete + precise + incomplete);
 
-		if (text !== this.priorUpdateText) {
-			this.#write(text);
-			this.priorUpdateText = text;
+		if (updateText !== this.priorUpdateText) {
+			this.#write(updateText);
+			this.priorUpdateText = updateText;
 		}
 
 		if (finished && this.autoComplete) this.complete();
@@ -256,13 +270,13 @@ export default class Progress {
 		this.#write(`${message}`);
 		this.#toNextLine();
 		this.#write(this.priorUpdateText);
-		if (!this.hideCursor) this.#showCursor();
+		// if (!this.hideCursor) this.#showCursor();
 	}
 
 	#write(msg?: string): void {
 		if (this.hideCursor) this.#hideCursor();
 		this.#writeRaw(`\r${msg ?? ''}${ansiCSI.clearEOL}`);
-		if (!this.hideCursor) this.#showCursor();
+		// if (!this.hideCursor) this.#showCursor();
 	}
 
 	#writeRaw(msg: string) {
