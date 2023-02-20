@@ -2,6 +2,8 @@
 
 // spell-checker:ignore (libs) denque (shell/cmd) netsh wlan (WLAN) BSSID
 
+// ToDO: add input checking for ESC/CR/q or Q and swallow
+
 // ref: [How to manage wifi networks from CMD](https://www.windowscentral.com/how-manage-wireless-networks-using-command-prompt-windows-10) @@ <https://archive.is/KAF2I> , <https://archive.is/jz5xy>
 // ref: <https://www.kapilarya.com/fix-the-hosted-network-couldnt-be-started-in-windows-10> @@ <https://archive.is/lHhzH>
 
@@ -34,16 +36,17 @@ function netshWlanShowInterfaces() {
 function netshOutputToMaps(output?: string) {
 	if (output == null) return undefined;
 	const LF = '\n';
-	const eolReS = '\r?\n|\r'; // MacOS, POSIX, or WinOS
-	const EOL = new RegExp(eolReS, 'gms');
+	const EOL = new RegExp('\r?\n|\r', 'gms'); // WinOS, POSIX, or MacOS
 	const elementRx = /^.*[:]\s*\S/;
-	// note: prior `replace()` is needed as a simple `split(`(?:${eolRes}){2}`) would otherwise incorrectly match an isolated CRLF as a double EOL
-	const sections = output.replace(EOL, LF).split(`${LF}${LF}`).filter((e) => e.match(elementRx));
+	// // note: prior `replace()` is needed as a simple `split(`(?:${eolRes}){2}`) would otherwise incorrectly match an isolated CRLF as a double EOL
+	// const sections = output.replace(EOL, LF).split(`${LF}${LF}`).filter((e) => e.match(elementRx));
+	const doubleEOL = new RegExp('\r?\n\r?\n|\r\r', 'gms'); // WinOS, POSIX, or MacOS
+	const sections = output.split(doubleEOL).filter((e) => e.match(elementRx));
 	// console.warn({ sections });
 	return sections.map((e) =>
 		new Map(
 			e
-				.split(LF)
+				.split(EOL)
 				.reduce((result, e) => {
 					if (e.match(elementRx)) result.push(e);
 					else result.push(result.pop() + LF + e.trimStart());
@@ -134,11 +137,13 @@ const nReadings = /* 10 */ Infinity;
 const arr: Map<string, string>[] = [];
 const goal = 100;
 const progress = new Progress({
+	title: 'WiFi Signals',
 	goal,
-	progressTemplate: ':label signal * :percent * :bar * ',
 	autoComplete: false,
-	hideCursor: true,
+	// hideCursor: true,
 });
+
+// progress.log('WiFi Signals (via `log()`)');
 
 // ref: [Infinite loops and SIGINT (aka, "don't block the JS event loop")](https://stackoverflow.com/questions/22594723/how-does-catching-ctrl-c-works-in-node) @@ <https://archive.is/BZRKM>
 // ref: [NodeJS ~ SIGINT and loops](https://github.com/nodejs/node/issues/9050)
@@ -165,12 +170,14 @@ const _ = setInterval(async function () {
 		const dBm = dBmFromQuality(signalQuality);
 		const qualityLevel = qualityLevelInfo(dBm);
 		// console.warn({ signalQuality, dBm, qualityLevel });
+		const prefix = `${wifiInterfaceData?.[0]?.get('@')} :: ${
+			wifiInterfaceData?.[0]?.get('Name') ?? 'unknown'
+		} @ ${dBm.toFixed(1)} dBm`;
+		// const suffix = `${wifiInterfaceData?.[0]?.get('Name')}`;
 		progress.update(signalQuality, {
-			label: `${wifiInterfaceData?.[0]?.get('@')}:${wifiInterfaceData?.[0]?.get('Name')}:${
-				dBm.toFixed(1)
-			}`,
-			symbolComplete: qualityLevel.signal,
-			symbolIncomplete: qualityLevel.background,
+			barSymbolComplete: qualityLevel.signal,
+			barSymbolIncomplete: qualityLevel.background,
+			progressTemplate: `${prefix} * {percent} * {bar} *`,
 		});
 	} else {
 		progress.complete();
