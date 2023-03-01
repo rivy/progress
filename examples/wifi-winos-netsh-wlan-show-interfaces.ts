@@ -1,6 +1,6 @@
 // `deno run --allow-run $0`
 
-// spell-checker:ignore (libs) denque (shell/cmd) netsh wlan (WLAN) BSSID
+// spell-checker:ignore (libs) denque (shell/cmd) netsh wlan CONOUT (WLAN) BSSID
 
 // ToDO: add input checking for ESC/CR/q or Q and swallow
 
@@ -170,19 +170,26 @@ function qualityLevelInfo(dBm: number) {
 const nReadings = /* 10 */ Infinity;
 // const arrayForWhat: Map<string, string>[] = [];
 
+const writer = Deno.openSync('CONOUT$', { create: true, write: true });
+// console.warn({ writer, info: writer.statSync() });
+// writeAllSync(writer, new TextEncoder().encode('Test to CONOUT$\n'));
 const progress = new Progress({
 	title: 'WiFi Signals',
 	// completeTemplate: 'done',
 	autoComplete: false,
+	displayAlways: true,
 	hideCursor: true,
+	writer,
 });
+
+console.warn({ progress });
 
 // progress.log('WiFi Signals (via `log()`)');
 
 // ref: [Infinite loops and SIGINT (aka, "don't block the JS event loop")](https://stackoverflow.com/questions/22594723/how-does-catching-ctrl-c-works-in-node) @@ <https://archive.is/BZRKM>
 // ref: [NodeJS ~ SIGINT and loops](https://github.com/nodejs/node/issues/9050)
 let index = 0;
-// * debounce occasional signal aquisition failure
+// * debounce occasional signal acquisition failure
 const maxSequentialFailures = 3;
 let sequentialFailures = 0;
 const _ = setInterval(async function () {
