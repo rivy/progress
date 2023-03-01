@@ -3,8 +3,32 @@ export { MultiProgressBar } from './multi.ts';
 
 const isWinOS = Deno.build.os === 'windows';
 
+// spell-checker:ignore (WinOS) CONOUT
+
+// ToDO: `cursorRest = [start, end, after]`, default = after
+// ToDO: ES6-template compatible format strings
+// ref: <>
+// ```js
+// const fill = function(template: string, vars = {}) {
+// 	const keys = Object.keys(vars);
+// 	const values = Object.values(vars);
+// 	return new Function(...keys, `return \`${template}\`;`)(...values);
+// };
+//
+// const s = 10; console.log(fill('s=${s.toString().padStart(4,`.`)}',{s}));"
+// ```
+// ToDO: add ability/option to write directly to console via '$CONOUT' or '/dev/tty' avoiding writes to STDOUT or STDERR
+// ToDO: add `pause(clearOnPause: boolean = false)` which could be used for the controller to cleanly print to STDERR/OUT and then `resume()`
+
 // ANSI CSI sequences; ref: <https://en.wikipedia.org/wiki/ANSI_escape_code> @@ <https://archive.is/CUtrX>
-const ansiCSI = { showCursor: '\x1b[?25h', hideCursor: '\x1b[?25l', clearEOL: '\x1b[0K' };
+const ansiCSI = {
+	clearEOL: '\x1b[0K',
+	clearEOS: '\x1b[0J',
+	clearLine: '\x1b[2K',
+	cursorUp: /* move cursor up {n} lines */ '\x1b[{n}A',
+	hideCursor: '\x1b[?25l',
+	showCursor: '\x1b[?25h',
+};
 
 type ConsoleSize = { columns: number; rows: number };
 function ttySize(rid = Deno.stdout.rid) {
@@ -22,17 +46,19 @@ function ttySize(rid = Deno.stdout.rid) {
 }
 
 interface constructorOptions {
-	// *default* progress line settings
+	// *default* progress line update options
 	goal?: number;
 	label?: string;
 	barSymbolComplete?: string;
 	barSymbolIncomplete?: string;
 	barSymbolIntermediate?: string[];
-	progressBarWidth?: number;
+	completeTemplate?: string;
+	progressBarWidthMax?: number;
+	progressBarWidthMin?: number;
 	progressTemplate?: string;
 	autoComplete?: boolean;
-	clearOnComplete?: boolean;
 	// render settings
+	clearAllOnComplete?: boolean;
 	hideCursor?: boolean;
 	maxWidth?: number;
 	minRenderInterval?: number;
@@ -46,13 +72,14 @@ interface updateOptions {
 	barSymbolComplete?: string;
 	barSymbolIncomplete?: string;
 	barSymbolIntermediate?: string[];
-	progressBarWidth?: number;
+	completeTemplate?: string;
+	progressBarWidthMax?: number;
+	progressBarWidthMin?: number;
 	progressTemplate?: string;
 	autoComplete?: boolean;
-	clearOnComplete?: boolean;
 }
 
-type ProgressUpdateObject = { value: number; options?: updateOptions };
+// type ProgressUpdateObject = { value: number; options?: updateOptions };
 
 export default class Progress {
 	label: string;
@@ -60,12 +87,15 @@ export default class Progress {
 	barSymbolComplete: string;
 	barSymbolIncomplete: string;
 	barSymbolIntermediate: string[];
-	progressBarWidth: number;
+	completeTemplate: string | null | undefined;
+	progressBarWidthMax: number;
+	progressBarWidthMin: number;
 	progressTemplate: string;
 	autoComplete: boolean;
-	clearOnComplete: boolean;
+	clearAllOnComplete: boolean;
 	hideCursor: boolean;
 	minRenderInterval: number;
+	title: string | null | undefined;
 	writer: Deno.WriterSync & { rid: number };
 	ttyColumns: number;
 	isTTY: boolean;
@@ -80,16 +110,19 @@ export default class Progress {
 	/**
 	 * Goal, label, barSymbolComplete, barSymbolIncomplete, and barSymbolIntermediate also be changed dynamically in the update method
 	 *
-	 * @param goal total number of ticks to complete, default: 100
-	 * @param label progress line label text, default: ''
-	 * @param barSymbolComplete completion symbol, default: colors.bgGreen(' ')
-	 * @param barSymbolIncomplete incomplete symbol, default: colors.bgWhite(' ')
-	 * @param barSymbolIntermediate incomplete symbol, default: colors.bgWhite(' ')
-	 * @param progressBarWidth the displayed width of the progress bar, default: 50 characters
+	 * @param goal  total number of ticks to complete, default: 100
+	 * @param label  progress line label text, default: ''
+	 * @param barSymbolComplete  completion symbol, default: colors.bgGreen(' ')
+	 * @param barSymbolIncomplete  incomplete symbol, default: colors.bgWhite(' ')
+	 * @param barSymbolIntermediate  incomplete symbol, default: colors.bgWhite(' ')
+	 * @param completeTemplate  progress display line content for completion, default: undefined
+	 * @param progressBarWidthMax  the maximum displayed width of the progress bar, default: 50 characters
+	 * @param progressBarWidthMin  the minimum displayed width of the progress bar, default: 10 characters
 	 * @param progressTemplate  progress display line content, default: ':label :percent :bar :elapsed :value/:goal'
-	 * @param autoComplete automatically `complete()` when goal is reached, default: true
-	 * @param clearOnComplete  clear the progress line on completion, default: false
+	 * @param autoComplete  automatically `complete()` when goal is reached, default: true
+	 * @param clearAllOnComplete  clear the entire progress display upon completion, default: false
 	 * @param hideCursor  hide cursor until progress line display is complete, default: false
+	 * @param title  progress title line (static), default: undefined
 	 * @param minRenderInterval  minimum time between updates in milliseconds, default: 16 ms
 	 */
 	constructor(
@@ -99,30 +132,57 @@ export default class Progress {
 			barSymbolComplete = bgGreen(' '),
 			barSymbolIncomplete = bgWhite(' '),
 			barSymbolIntermediate = [],
-			progressBarWidth = 50,
+			completeTemplate = undefined,
+			progressBarWidthMax = 50,
+			progressBarWidthMin = 10,
 			progressTemplate = ':label :percent :bar :elapsed :value/:goal',
 			autoComplete = true,
-			clearOnComplete = false,
+			clearAllOnComplete = true,
 			hideCursor = false,
 			minRenderInterval = 16,
+			title = undefined,
 			writer = Deno.stderr,
 		}: constructorOptions = {},
 	) {
-		this.label = label;
 		this.goal = goal;
+		this.label = label;
 		this.barSymbolComplete = barSymbolComplete;
 		this.barSymbolIntermediate = barSymbolIntermediate.concat(barSymbolComplete);
 		this.barSymbolIncomplete = barSymbolIncomplete;
-		this.autoComplete = autoComplete;
-		this.clearOnComplete = clearOnComplete;
-		this.progressBarWidth = progressBarWidth;
+		this.completeTemplate = completeTemplate;
+		this.progressBarWidthMax = progressBarWidthMax;
+		this.progressBarWidthMin = progressBarWidthMin;
 		this.progressTemplate = progressTemplate;
+		this.autoComplete = autoComplete;
+		this.clearAllOnComplete = clearAllOnComplete;
 		this.hideCursor = hideCursor;
 		this.minRenderInterval = minRenderInterval;
+		this.title = title;
 		this.writer = writer;
 		this.isTTY = Deno.isatty(writer.rid);
 		this.ttyColumns = ttySize(writer.rid)?.columns ?? 80;
+		// this.#init();
 	}
+
+	// #init(options: constructorOptions) {
+	// 	this.goal = options.goal;
+	// 	this.label = options.label;
+	// 	this.barSymbolComplete = options.barSymbolComplete;
+	// 	this.barSymbolIntermediate = options.barSymbolIntermediate.concat(options.barSymbolComplete);
+	// 	this.barSymbolIncomplete = options.barSymbolIncomplete;
+	// 	this.completeTemplate = options.completeTemplate;
+	// 	this.progressBarWidthMax = options.progressBarWidthMax;
+	// 	this.progressBarWidthMin = options.progressBarWidthMin;
+	// 	this.progressTemplate = options.progressTemplate;
+	// 	this.autoComplete = options.autoComplete;
+	// 	this.clearAllOnComplete = options.clearAllOnComplete;
+	// 	this.hideCursor = options.hideCursor;
+	// 	this.minRenderInterval = options.minRenderInterval;
+	// 	this.title = options.title;
+	// 	this.writer = options.writer;
+	// 	this.isTTY = Deno.isatty(writer.rid);
+	// 	this.ttyColumns = ttySize(writer.rid)?.columns ?? 80;
+	// }
 
 	/**
 	 * update/render progress
@@ -136,11 +196,11 @@ export default class Progress {
 	 *   - `symbolIntermediate` - intermediate symbols
 	 */
 	// ToDO: overload and allow...
-	// `update(number, options = {})` => update first progress line (note: two arguments)
-	// `update({ number, options? })` => (alternate form) update first progress line
+	// `update(number, options: updateOptions = {})` => update first progress line (note: two arguments)
+	// `update(u: ProgressUpdateObject /* { number, options? } */)` => (alternate form) update first progress line
 	// `update(number[])` => update first N progress lines
-	// `update({ number, options? }[])` => update first N progress lines
-	// update(v: number, options?: unknown): void;
+	// `update(u: ProgressUpdateObject[] /* { number, options? }[] */)` => update first N progress lines
+	// update(u: number, options?: unknown): void;
 	update(v: number, options: updateOptions = {}): void {
 		if (this.isCompleted || !this.isTTY) return;
 
@@ -213,7 +273,7 @@ export default class Progress {
 		let availableSpace = Math.max(0, this.ttyColumns - updateText.replace('{bar}', '').length);
 		if (availableSpace && isWinOS) availableSpace -= 1;
 
-		const width = Math.min(this.progressBarWidth, availableSpace);
+		const width = Math.min(this.progressBarWidthMax, availableSpace);
 		const finished = v >= goal;
 
 		const preciseBar = options.barSymbolIntermediate ?? this.barSymbolIntermediate;
@@ -252,11 +312,13 @@ export default class Progress {
 	 */
 	complete(): void {
 		this.isCompleted = true;
-		if (this.clearOnComplete) {
+		if (this.completeTemplate == null) { /* do nothing */ }
+		else if (this.completeTemplate == '') {
 			this.#write();
-			// } else {
-			// 	this.#toNextLine();
+		} else {
+			this.#write(this.completeTemplate);
 		}
+		// this.#toNextLine();
 		this.#showCursor();
 	}
 
@@ -268,7 +330,7 @@ export default class Progress {
 	log(message: string | number): void {
 		if (this.hideCursor) this.#hideCursor();
 		this.#write(`${message}`);
-		this.#toNextLine();
+		this.#cursorToNextLine();
 		this.#write(this.priorUpdateText);
 		// if (!this.hideCursor) this.#showCursor();
 	}
@@ -283,8 +345,18 @@ export default class Progress {
 		writeAllSync(this.writer, this.encoder.encode(msg));
 	}
 
-	#toNextLine() {
+	/** Move cursor to beginning of next line (scrolls screen if needed) */
+	#cursorToNextLine() {
 		this.#writeRaw('\r\n');
+	}
+
+	/** Move cursor to beginning of current line */
+	#cursorToLineStart() {
+		this.#writeRaw('\r');
+	}
+
+	#cursorUp(nRows = 0) {
+		this.#writeRaw(`${ansiCSI.cursorUp.replace('{n}', `${nRows}`)}`);
 	}
 
 	#hideCursor(): void {
