@@ -1,4 +1,5 @@
 import { bgGreen, bgWhite, sprintf, writeAllSync } from './deps.ts';
+import { consoleSize } from './src/lib/consoleSize.ts';
 export { MultiProgressBar } from './multi.ts';
 
 const isWinOS = Deno.build.os === 'windows';
@@ -30,20 +31,7 @@ const ansiCSI = {
 	showCursor: '\x1b[?25h',
 };
 
-type ConsoleSize = { columns: number; rows: number };
-function ttySize(rid = Deno.stdout.rid) {
-	// `Deno.consoleSize()` is unstable API (as of v1.19+) => deno-lint-ignore no-explicit-any
-	// deno-lint-ignore no-explicit-any
-	const denoConsoleSize = (Deno as any).consoleSize as (rid: number) => ConsoleSize | undefined;
-	let size: ConsoleSize | undefined;
-	try {
-		// * `denoConsoleSize()` may throw (if rid is not a TTY [ie, redirected])
-		size = denoConsoleSize?.(rid);
-	} catch {
-		size = undefined;
-	}
-	return size;
-}
+const ttySize = await consoleSize(); // async global b/c `Deno.consoleSize()` lost functionality when stabilized (see GH:denoland/deno#17982)
 
 interface constructorOptions {
 	// *default* progress line update options
@@ -59,6 +47,7 @@ interface constructorOptions {
 	autoComplete?: boolean;
 	// render settings
 	clearAllOnComplete?: boolean;
+	displayAlways?: boolean;
 	hideCursor?: boolean;
 	maxWidth?: number;
 	minRenderInterval?: number;
@@ -93,13 +82,14 @@ export default class Progress {
 	progressTemplate: string;
 	autoComplete: boolean;
 	clearAllOnComplete: boolean;
+	displayAlways: boolean;
 	hideCursor: boolean;
 	minRenderInterval: number;
 	title: string | null | undefined;
 	writer: Deno.WriterSync & { rid: number };
 	ttyColumns: number;
-	isTTY: boolean;
 
+	private display = true;
 	private isCompleted = false;
 	private startTime = Date.now();
 	private priorUpdateText = '';
@@ -121,6 +111,7 @@ export default class Progress {
 	 * @param progressTemplate  progress display line content, default: ':label :percent :bar :elapsed :value/:goal'
 	 * @param autoComplete  automatically `complete()` when goal is reached, default: true
 	 * @param clearAllOnComplete  clear the entire progress display upon completion, default: false
+	 * @param displayAlways  avoid TTY check on writer and always display progress, default: false
 	 * @param hideCursor  hide cursor until progress line display is complete, default: false
 	 * @param title  progress title line (static), default: undefined
 	 * @param minRenderInterval  minimum time between updates in milliseconds, default: 16 ms
@@ -138,6 +129,7 @@ export default class Progress {
 			progressTemplate = ':label :percent :bar :elapsed :value/:goal',
 			autoComplete = true,
 			clearAllOnComplete = true,
+			displayAlways = false,
 			hideCursor = false,
 			minRenderInterval = 16,
 			title = undefined,
@@ -155,12 +147,15 @@ export default class Progress {
 		this.progressTemplate = progressTemplate;
 		this.autoComplete = autoComplete;
 		this.clearAllOnComplete = clearAllOnComplete;
+		this.displayAlways = displayAlways;
 		this.hideCursor = hideCursor;
 		this.minRenderInterval = minRenderInterval;
 		this.title = title;
 		this.writer = writer;
-		this.isTTY = Deno.isatty(writer.rid);
-		this.ttyColumns = ttySize(writer.rid)?.columns ?? 80;
+		this.ttyColumns = ttySize?.columns ?? 80;
+
+		this.display = this.displayAlways || Deno.isatty(writer.rid);
+
 		// this.#init();
 	}
 
@@ -202,7 +197,7 @@ export default class Progress {
 	// `update(u: ProgressUpdateObject[] /* { number, options? }[] */)` => update first N progress lines
 	// update(u: number, options?: unknown): void;
 	update(v: number, options: updateOptions = {}): void {
-		if (this.isCompleted || !this.isTTY) return;
+		if (this.isCompleted || !this.display) return;
 
 		if ((isNaN(v)) || (v < 0)) {
 			throw new Error(`progress: value must be a number which is greater than or equal to 0`);
