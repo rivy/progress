@@ -1,3 +1,5 @@
+// spell-checker:ignore (vars) strs
+
 import { bgGreen, bgWhite, writeAllSync } from './deps.ts';
 
 const isTTY = Deno.isatty(Deno.stdout.rid);
