@@ -1,6 +1,7 @@
 // spell-checker:ignore (names) Deno
 // spell-checker:ignore (shell) stty tput
 // spell-checker:ignore (shell/CMD) CONOUT
+// spell-checker:ignore (WinAPI) CSTR CWSTR LPCSTR LPCWSTR MBCS
 
 // #DONE: ToDO: add permission gating to avoid...
 // ```shell
@@ -12,11 +13,135 @@
 //    Allow? [y/n (y = yes allow, n = no deny)]  n
 // ```
 
+//===
+
+// import '../../vendor/deno-unstable.lib.d.ts'; // import Deno UNSTABLE types
+
+// import { assert as _assert } from 'https://deno.land/std@0.178.0/testing/asserts.ts';
+
+//=== utils
+// import { stringToCSTR, stringToCWSTR, ToUint32 } from './util.ts';
+
+// ref: [JoelOnSoftware ~ Minimum knowledge of Unicode](https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses) @@ <>
+// ref: [JavaScript character encoding](https://mathiasbynens.be/notes/javascript-encoding) @@ <https://archive.is/yNnof>
+// ref: [MSDN ~ Unicode and MBCS support](https://learn.microsoft.com/en-us/cpp/atl-mfc-shared/unicode-and-multibyte-character-set-mbcs-support) @@ <>
+// ref: [MSDN ~ string conversions](https://learn.microsoft.com/en-US/sql/relational-databases/collations/collation-and-unicode-support#utf8) @@ <https://archive.is/hZvZx>
+// ref: [MSDN ~ LPCSTR](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/f8d4fe46-6be8-44c9-8823-615a21d17a61) @@ <https://archive.is/AduZv>)
+
+// stringToCSTR()
+/** Convert `s` to a WinOS-compatible NUL-terminated CSTR buffer, *dropping* any internal NUL characters.
+ *
+ * NOTE: supports *only* ASCII characters, silently **dropping** non-ASCII-compatible code points without error/panic.
+ */
+export function stringToCSTR(s: string) {
+	// CSTR == NUL-terminated string of 8-bit Windows (ANSI) characters; note: ANSI representation of non-ASCII characters is code-page dependent
+	// [2023-01] note: JavaScript TextEncoder() only supports 'utf-8' encoding
+	// * alternatively, legacy support for code-page encoding is available via `npm:text-encoding` [code @ <https://github.com/inexorabletash/text-encoding>]
+	const MAX_ASCII = 127;
+	const NUL = 0;
+	const length = s.length;
+	const buffer = new ArrayBuffer((length + 1) * Uint8Array.BYTES_PER_ELEMENT);
+	const u8 = new Uint8Array(buffer);
+	let bufferIndex = 0;
+	for (let i = 0; i <= length; i++) {
+		const charCode = s.charCodeAt(i);
+		if (!isNaN(charCode) && (charCode <= MAX_ASCII) && (charCode != NUL)) {
+			u8[bufferIndex++] = charCode;
+		}
+	}
+	u8[bufferIndex] = 0;
+	return u8;
+}
+
+// stringToCWSTR()
+/** Convert `s` to WinOS-compatible NUL-terminated wide-character string buffer (using UTF-16 encoding), *dropping* any internal NUL characters.
+ *
+ * Note: assumes WinOS supports UTF-16 (not just UCS-2); ie, WinOS >= v5.0/2000.
+ */
+export function stringToCWSTR(s: string) {
+	// CWSTR = a string of 16-bit Unicode characters (aka, wide-characters/WCHAR/wchar_t), which MAY be null-terminated
+	// note: WinOS *after* Windows NT uses UTF-16 encoding; WinOS versions *prior* Windows 2000 use UCS-2 (aka UTF-16 w/o surrogate support [ie, BMP-plane-only])
+	const NUL = 0;
+	const length = s.length; // length in UTF-16 code units
+	const buffer = new ArrayBuffer((length + 1) * Uint16Array.BYTES_PER_ELEMENT);
+	const u16 = new Uint16Array(buffer);
+	let bufferIndex = 0;
+	for (let i = 0; i <= length; i++) {
+		{
+			const charCode = s.charCodeAt(i);
+			if (!isNaN(charCode) && (charCode != NUL)) {
+				u16[bufferIndex++] = charCode;
+			}
+		}
+	}
+	u16[bufferIndex] = 0;
+	return u16;
+}
+
+// ref: inspired by [Integers and shift operators in JavaScript](https://2ality.com/2012/02/js-integers.html) @@ <https://archive.is/KdYv7>
+// ref: [Wikipedia ~ Two's complement](https://en.wikipedia.org/wiki/Two%27s_complement) @@ <https://archive.is/5ROjc>
+// NOTE:
+// ```js
+// // Range of N Bit 2's Complement => [ -1*(2**(N-1)), (2**(N-1))-1 ]
+// let i_SAFE = {max: Number.MAX_SAFE_INTEGER, min: Number.MIN_SAFE_INTEGER };
+// let u32 = {max: (2**32)-1, min: 0};
+// let i32 = {max: (2**31)-1, min: -1*(2**31) };
+// let u64 = {max: (2n**64n)-1n, min: 0n};
+// let i64 = {max: (2n**63n)-1n, min: -1n*(2n**63n) };
+// console.log({i_SAFE, u32, i32, u64, i64})
+// ```
+
+const pow2To32 = Math.pow(2, 32);
+function modulo(a: number, b: number) {
+	return a - Math.floor(a / b) * b;
+}
+function ToInteger(x: number) {
+	// ToDO: research and add rounding options
+	x = Number(x);
+	return x < 0 ? Math.ceil(x) : Math.floor(x);
+}
+export function ToUint32(x: number) {
+	return modulo(ToInteger(x), pow2To32);
+}
+
+export function sizeOfNativeType(type: Deno.NativeType) {
+	// spell-checker:ignore () isize
+	// ref: <https://github.com/DjDeveloperr/deno/blob/4c0a50ec1e123c39f3f51e66025d83fd8cb6a2c1/ext/ffi/00_ffi.js#L258>
+	switch (type) {
+		case 'bool':
+		case 'u8':
+		case 'i8':
+			return 1;
+		case 'u16':
+		case 'i16':
+			return 2;
+		case 'u32':
+		case 'i32':
+		case 'f32':
+			return 4;
+		case 'u64':
+		case 'i64':
+		case 'f64':
+		case 'pointer':
+		case 'buffer':
+		case 'function':
+		case 'usize':
+		case 'isize':
+			return 8;
+		default:
+			throw new TypeError(`Unsupported type: ${type}`);
+	}
+}
+
+//===
+
 const decoder = new TextDecoder(); // default == 'utf-8'
 const decode = (input?: Uint8Array): string => decoder.decode(input);
 
 const isWinOS = Deno.build.os === 'windows';
 
+const atImportAllowFFI =
+	((await Deno.permissions?.query({ name: 'ffi' }))?.state ?? 'granted') === 'granted';
 const atImportAllowRead =
 	((await Deno.permissions?.query({ name: 'read' }))?.state ?? 'granted') === 'granted';
 const atImportAllowRun =
@@ -69,6 +194,7 @@ export type ConsoleSizeOptions = {
  * ```
  *
  * @param rid ~ resource ID
+ * @tags no-throw
  */
 function denoConsoleSizeNT(rid: number) {
 	// no-throw `Deno.consoleSize(..)`
@@ -123,11 +249,13 @@ export const consoleSize = consoleSizeAsync; // default to fully functional `con
  * ```
  *
  * @param rid ~ resource ID
+ * @tags unstable
  */
 export function consoleSizeSync(
 	rid: number = Deno.stdout.rid,
 	options_: Partial<ConsoleSizeOptions> = {},
 ): ConsoleSize | undefined {
+	// ~ 0.75ms for WinOS
 	const options = {
 		fallbackRIDs: [Deno.stderr.rid],
 		consoleFileFallback: true,
@@ -138,7 +266,7 @@ export function consoleSizeSync(
 		const memo = consoleSizeCache.get(JSON.stringify({ rid, options }));
 		if (memo != undefined) return memo;
 	}
-	const size = consoleSizeViaDenoAPI(rid, options);
+	const size = consoleSizeViaDenoAPI(rid, options) ?? consoleSizeViaFFI();
 	consoleSizeCache.set(JSON.stringify({ rid, options }), size);
 	return size;
 }
@@ -152,6 +280,7 @@ export function consoleSizeSync(
  * ```
  *
  * @param rid ~ resource ID
+ * @tags unstable
  */
 export function consoleSizeViaDenoAPI(
 	rid: number = Deno.stdout.rid,
@@ -176,6 +305,156 @@ export function consoleSizeViaDenoAPI(
 		// console.warn(`fallbackFileName = ${fallbackFileName}; isatty(...) = ${file && Deno.isatty(file.rid)}`);
 		size = file && denoConsoleSizeNT(file.rid);
 		file && Deno.close(file.rid);
+	}
+
+	return size;
+}
+
+// consoleSizeViaFFI()
+/** Get the size of the console as columns/rows, via the FFI.
+ * * _unstable_ ~ requires the Deno `--unstable` flag for successful resolution (b/c the used `unstable.UnsafePointer` is unstable API, as of Deno v1.19.0 [2023-01-01; rivy])
+ *
+ * ```ts
+ * const { columns, rows } = consoleSizeViaFFI();
+ * ```
+ *
+ * @tags allow-ffi, unstable, winos-only
+ */
+export function consoleSizeViaFFI(): ConsoleSize | undefined {
+	// ~ 1.5 ms
+	if (!isWinOS) return undefined; // WinOS-only FFI implementation
+	if (!atImportAllowFFI) return undefined;
+	let size: ConsoleSize | undefined = undefined;
+
+	const unstable = (() => {
+		const u = {
+			dlopen: Deno.dlopen,
+			UnsafePointer: Deno.UnsafePointer,
+			UnsafePointerView: Deno.UnsafePointerView,
+		};
+		if ((Object.values(u) as (unknown | undefined)[]).every((e) => e != null)) return u;
+		return undefined;
+	})();
+	// console.warn({ unstable });
+
+	if (unstable != null) {
+		const dllKernel = (() => {
+			try {
+				return unstable.dlopen('kernel32.dll', {
+					'GetConsoleScreenBufferInfo':
+						/* https://learn.microsoft.com/en-us/windows/console/getconsolescreenbufferinfo */ {
+							parameters: ['pointer', 'buffer'],
+							result: 'u32', // BOOL
+						},
+					'CreateFileW':
+						/* https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew */ {
+							parameters: ['pointer', 'u32', 'u32', 'pointer', 'u32', 'u32', 'pointer'],
+							result: 'pointer', /* file handle */
+						},
+					'OpenFile': /* https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-openfile */
+						{ parameters: ['pointer', 'pointer', 'u32'], result: 'pointer' },
+				});
+			} catch {
+				return undefined;
+			}
+		})();
+
+		// console.warn('start CreateFile');
+		// ref: <https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew> @@ <https://archive.is/LbyEf>
+		const CF_OPEN_EXISTING = 3;
+		// ref: <https://github.com/retep998/winapi-rs/blob/5b1829956ef645f3c2f8236ba18bb198ca4c2468/src/um/winnt.rs#L1682>
+		// ...
+		// pub const GENERIC_READ: DWORD = 0x80000000;
+		// pub const GENERIC_WRITE: DWORD = 0x40000000;
+		// ...
+		// pub const FILE_SHARE_WRITE: DWORD = 0x00000002;
+		//...
+		const FILE_SHARE_WRITE = 0x00000002;
+		const GENERIC_READ = 0x80000000;
+		const GENERIC_WRITE = 0x40000000;
+		// ref: [Correct use of `CreateFileW()`](https://stackoverflow.com/questions/49145316/why-no-text-colors-after-using-createfileconout-to-redirect-the-console)
+		const h = dllKernel?.symbols.CreateFileW(
+			unstable.UnsafePointer.of(stringToCWSTR('CONOUT$')),
+			ToUint32(GENERIC_WRITE | GENERIC_READ), /* dwDesiredAccess */
+			ToUint32(FILE_SHARE_WRITE), /* dwShareMode */
+			null,
+			CF_OPEN_EXISTING,
+			0,
+			null,
+		) as Deno.PointerValue;
+		// console.warn('done CreateFile');
+
+		// NOTE: using `OpenFile()` is functionally equivalent to using `CreateFile()` but increases fn execution time from ~ 1.5 ms to ~ 5.25 ms
+		// // ref: <https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-openfile>
+		// // ref: <https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-ofstruct>
+		// // spell-checker:ignore () OFS_MAXPATHNAME OFSTRUCT
+		// const OF_READWRITE = 0x00000002;
+		// const OFS_MAXPATHNAME = 128;
+		// const OFSTRUCT_SIZE = 1 /* BYTE */ * 2 + 2 /* WORD */ * 3 + OFS_MAXPATHNAME;
+		// const ofstruct_buffer = new Uint8Array(OFSTRUCT_SIZE).fill(0);
+		// // console.warn('start OpenFile');
+		// const h = dllKernel?.symbols.OpenFile(
+		// 	unstable.UnsafePointer.of(stringToCString('CONOUT$')),
+		// 	unstable.UnsafePointer.of(ofstruct_buffer),
+		// 	OF_READWRITE,
+		// ) as Deno.PointerValue;
+		// _assert(
+		// 	ofstruct_buffer[0] <= OFSTRUCT_SIZE,
+		// 	`consoleSizeViaFFI(): possible buffer overrun; FFI returned a buffer size (${
+		// 		ofstruct_buffer[0]
+		// 	}) larger than supplied buffer size (${OFSTRUCT_SIZE})`,
+		// );
+		// // buffer[buffer.length - 1] = 0; // force `szPathName[]` to end with NUL character
+		// // console.warn('done OpenFile', { buffer });
+
+		const FALSE = 0;
+		const INVALID_HANDLE = -1;
+
+		// CONSOLE_SCREEN_BUFFER_INFO == {
+		// 	dwSize: { X: WORD, Y: WORD },
+		// 	dwCursorPosition: { X: WORD, Y: WORD },
+		// 	wAttributes: WORD,
+		// 	srWindow: { Left: WORD, Top: WORD, Right: WORD, Bottom: WORD },
+		// 	dwMaximumWindowSize: { X: WORD, Y: WORD },
+		// }
+		const dwSize: Deno.NativeType[] = ['u16', 'u16'];
+		const dwCursorPosition: Deno.NativeType[] = ['u16', 'u16'];
+		const wAttributes: Deno.NativeType[] = ['u16'];
+		const srWindow: Deno.NativeType[] = ['u16', 'u16', 'u16', 'u16'];
+		const dwMaximumWindowSize: Deno.NativeType[] = ['u16', 'u16'];
+		const CONSOLE_SCREEN_BUFFER_INFO: Deno.NativeType[] = [
+			...dwSize,
+			...dwCursorPosition,
+			...wAttributes,
+			...srWindow,
+			...dwMaximumWindowSize,
+		];
+		const CONSOLE_SCREEN_BUFFER_INFO_size = CONSOLE_SCREEN_BUFFER_INFO.flat().reduce(
+			(sum, type) => sum += sizeOfNativeType(type),
+			0,
+		);
+		const info_buffer = new Uint8Array(CONSOLE_SCREEN_BUFFER_INFO_size).fill(0);
+		const handle = (unstable.UnsafePointer.value(h) != INVALID_HANDLE) ? h : null;
+		// console.warn({ h, handle });
+		const result = handle &&
+			(dllKernel?.symbols.GetConsoleScreenBufferInfo(handle, info_buffer) ?? FALSE) != FALSE;
+		const ptr = result ? unstable.UnsafePointer.of(info_buffer) : null;
+		const ptrView = ptr && new unstable.UnsafePointerView(ptr);
+		const info = ptrView &&
+			{
+				dwSize: { X: ptrView.getInt16(0), Y: ptrView.getInt16(2) },
+				dwCursorPosition: { X: ptrView.getInt16(4), Y: ptrView.getInt16(6) },
+				wAttributes: ptrView.getUint16(8),
+				srWindow: {
+					Left: ptrView.getInt16(10),
+					Top: ptrView.getInt16(12),
+					Right: ptrView.getInt16(14),
+					Bottom: ptrView.getInt16(16),
+				},
+				dwMaximumWindowSize: { X: ptrView.getInt16(18), Y: ptrView.getInt16(20) },
+			};
+		// console.warn('FFI', { buffer, info });
+		if (info != null) size = { columns: info.dwSize.X, rows: info.dwSize.Y };
 	}
 
 	return size;
@@ -216,7 +495,7 @@ export function consoleSizeAsync(
 	// ~ 0.5 ms for WinOS or POSIX (for open, un-redirected STDOUT or STDERR, using the fast [Deno] API)
 	// ~ 150 ms for WinOS ; ~ 75 ms for POSIX (when requiring use of the shell script fallbacks)
 	const promise = Promise
-		.resolve(consoleSizeViaDenoAPI(rid, options))
+		.resolve(consoleSizeSync(rid, options))
 		.then((size) => {
 			consoleSizeCache.set(JSON.stringify({ rid, options }), size);
 			return size;
@@ -260,6 +539,8 @@ export function consoleSizeAsync(
  * ```ts
  * const { columns, rows } = await consoleSizeViaMode();
  * ```
+ *
+ * @tags winos-only
  */
 export function consoleSizeViaMode(): Promise<ConsoleSize | undefined> {
 	// ~ 25 ms (WinOS-only)
@@ -316,6 +597,8 @@ export function consoleSizeViaMode(): Promise<ConsoleSize | undefined> {
  * ```ts
  * const { columns, rows } = await consoleSizeViaPowerShell();
  * ```
+ *
+ * @tags winos-only
  */
 export function consoleSizeViaPowerShell(): Promise<ConsoleSize | undefined> {
 	// ~ 150 ms (for WinOS)
@@ -358,6 +641,8 @@ export function consoleSizeViaPowerShell(): Promise<ConsoleSize | undefined> {
  * ```ts
  * const { columns, rows } = await consoleSizeViaSTTY();
  * ```
+ *
+ * @tags non-winos-only
  */
 export function consoleSizeViaSTTY(): Promise<ConsoleSize | undefined> {
 	// * note: `stty size` depends on a TTY connected to STDIN; ie, `stty size </dev/null` will fail
@@ -394,6 +679,8 @@ export function consoleSizeViaSTTY(): Promise<ConsoleSize | undefined> {
  * ```ts
  * const { columns, rows } = await consoleSizeViaTPUT();
  * ```
+ *
+ * @tags winos-only
  */
 export function consoleSizeViaTPUT(): Promise<ConsoleSize | undefined> {
 	// * note: `tput` is resilient to STDIN, STDOUT, and STDERR redirects, but requires two system shell calls
