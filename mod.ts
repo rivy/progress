@@ -6,7 +6,7 @@ const isWinOS = Deno.build.os === 'windows';
 
 // spell-checker:ignore (WinOS) CONOUT
 
-// ToDO: `cursorRest = [start, end, after]`, default = after
+// ToDO: `cursorRest = [start, end, after, title_start?, title_end?, title_after?]`, default = after
 // ToDO: ES6-template compatible format strings
 // ref: <>
 // ```js
@@ -19,7 +19,7 @@ const isWinOS = Deno.build.os === 'windows';
 // const s = 10; console.log(fill('s=${s.toString().padStart(4,`.`)}',{s}));"
 // ```
 // ToDO: add ability/option to write directly to console via '$CONOUT' or '/dev/tty' avoiding writes to STDOUT or STDERR
-// ToDO: add `pause(clearOnPause: boolean = false)` which could be used for the controller to cleanly print to STDERR/OUT and then `resume()`
+// ToDO: add `pause(clearOnPause: boolean = true)` which could be used for the controller to cleanly print to STDERR/OUT and then `resume()`
 
 // ANSI CSI sequences; ref: <https://en.wikipedia.org/wiki/ANSI_escape_code> @@ <https://archive.is/CUtrX>
 const ansiCSI = {
@@ -51,7 +51,7 @@ interface constructorOptions {
 	hideCursor?: boolean;
 	maxWidth?: number;
 	minRenderInterval?: number;
-	title?: string;
+	title?: string; // ToDO: string | string[]
 	writer?: Deno.WriterSync & { rid: number };
 }
 
@@ -196,8 +196,20 @@ export default class Progress {
 	// `update(number[])` => update first N progress lines
 	// `update(u: ProgressUpdateObject[] /* { number, options? }[] */)` => update first N progress lines
 	// update(u: number, options?: unknown): void;
-	update(v: number, options: updateOptions = {}): void {
+	// update([number, updateOptions][]): void;
+	// update(v: number, options: updateOptions = {}): void {
+	update(_value_: number, _options_?: updateOptions): void;
+	update(_values_: [number, updateOptions?][]): void;
+	update(x: number | [number, updateOptions?][], options_: updateOptions = {}): void {
+		let values: [number, updateOptions?];
+		if (!Array.isArray(x)) {
+			values = [x, options_];
+		} else values = x[0];
+		console.log({ values });
 		if (this.isCompleted || !this.display) return;
+
+		const v = values[0];
+		const options = values[1] ?? {};
 
 		if ((isNaN(v)) || (v < 0)) {
 			throw new Error(`progress: value must be a number which is greater than or equal to 0`);
