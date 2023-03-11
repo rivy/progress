@@ -4,6 +4,11 @@
 
 // ToDO: add input checking for ESC/CR/q or Q and swallow
 
+// ToDO: `maxSequentialFailures` will likely never trigger correctly
+//   ... need to use current failure with history of prior IDs (and/or fetchDelays) and success rates to trigger failure exit
+// FixME: `fetchDelay` of 0-10 ms causes high CPU utilization
+// FixME: SIGBREAK occasionally causes `Unhandled Exception: System.NullReferenceException: Object reference not set to an instance of an object.`
+
 // ref: [How to manage wifi networks from CMD](https://www.windowscentral.com/how-manage-wireless-networks-using-command-prompt-windows-10) @@ <https://archive.is/KAF2I> , <https://archive.is/jz5xy>
 // ref: <https://www.kapilarya.com/fix-the-hosted-network-couldnt-be-started-in-windows-10> @@ <https://archive.is/lHhzH>
 
@@ -182,7 +187,7 @@ const progress = new Progress({
 	writer,
 });
 
-console.warn({ progress });
+// console.warn({ progress });
 
 // progress.log('WiFi Signals (via `log()`)');
 
@@ -190,10 +195,14 @@ console.warn({ progress });
 // ref: [NodeJS ~ SIGINT and loops](https://github.com/nodejs/node/issues/9050)
 let index = 0;
 // * debounce occasional signal acquisition failure
-const maxSequentialFailures = 3;
+const maxSequentialFailures = 10;
 let sequentialFailures = 0;
-const _ = setInterval(async function () {
-	// for (let index = 0; !exit_requested && (index < nReadings); index++) {
+let totalFailures = 0;
+//
+let fetchDelay = 100; // ms
+let fetchIntervalID = 0;
+const fetchFn = async function (myID = fetchIntervalID) {
+	// note: interval `fetchDelay` timing self-adjusts for fetch failures
 	index = (index < Number.MAX_SAFE_INTEGER) ? index + 1 : index;
 	if (index > nReadings) exit_requested = true;
 	// console.warn({ index, exit_requested });
@@ -209,9 +218,22 @@ const _ = setInterval(async function () {
 			const signalQuality = Number(wifiInterfaceData?.[0]?.get('Signal')?.match(/\d+/));
 			return { signalQuality, wifiInterfaceData };
 		})();
-	if (Number.isNaN(signalQuality)) {
-		sequentialFailures += 1;
-		if (sequentialFailures > maxSequentialFailures) exit_requested = true;
+	if (!exit_requested && Number.isNaN(signalQuality)) {
+		totalFailures += 1;
+		if (myID == fetchIntervalID) {
+			sequentialFailures += 1;
+			progress.log(
+				`WARN: fetch failure (myID=${myID}; sequential=${sequentialFailures}; total=${totalFailures}; fetchDelay=${fetchDelay})`,
+			);
+			clearInterval(fetchIntervalID);
+			fetchDelay += 1;
+			fetchIntervalID = setInterval(fetchFn, fetchDelay);
+			if (sequentialFailures > maxSequentialFailures) exit_requested = true;
+		} else {
+			progress.log(
+				`WARN: fetch failure, unmatched ID (myID=${myID}; intervalID=${fetchIntervalID})`,
+			);
+		}
 	} else sequentialFailures = 0;
 	if (!exit_requested && !Number.isNaN(signalQuality)) {
 		const dBm = dBmFromQuality(signalQuality);
@@ -231,5 +253,5 @@ const _ = setInterval(async function () {
 		progress.complete();
 		Deno.exit(0);
 	}
-	// }
-}, 0);
+};
+fetchIntervalID = setInterval(fetchFn, fetchDelay);
