@@ -199,17 +199,19 @@ export default class Progress {
 	// update([number, updateOptions][]): void;
 	// update(v: number, options: updateOptions = {}): void {
 	update(_value_: number, _options_?: updateOptions): void;
-	update(_values_: [number, updateOptions?][]): void;
-	update(x: number | [number, updateOptions?][], options_: updateOptions = {}): void {
-		let values: [number, updateOptions?];
-		if (!Array.isArray(x)) {
-			values = [x, options_];
-		} else values = x[0];
+	update(_values_: (number | [number, updateOptions?])[]): void;
+	update(values_: number | (number | [number, updateOptions?])[], options_?: updateOptions): void {
+		let values: [number, updateOptions?][];
+		if (!Array.isArray(values_)) {
+			values = [[values_, options_]];
+		} else {
+			values = values_.map((e) => Array.isArray(e) ? e : [e, {}]);
+		}
 		console.log({ values });
 		if (this.isCompleted || !this.display) return;
 
-		const v = values[0];
-		const options = values[1] ?? {};
+		const v = values[0][0];
+		const options = values[0][1] ?? {};
 
 		if ((isNaN(v)) || (v < 0)) {
 			throw new Error(`progress: value must be a number which is greater than or equal to 0`);
