@@ -2,6 +2,9 @@ import { bgGreen, bgWhite, sprintf, writeAllSync } from './deps.ts';
 import { consoleSize } from './src/lib/consoleSize.ts';
 export { MultiProgressBar } from './multi.ts';
 
+// import _GraphemeSplitter from 'https://esm.sh/grapheme-splitter@1.0.4';
+import stringWidth from 'https://esm.sh/string-width@5.1.2';
+
 const isWinOS = Deno.build.os === 'windows';
 
 // spell-checker:ignore (WinOS) CONOUT
@@ -207,7 +210,7 @@ export default class Progress {
 		} else {
 			values = values_.map((e) => Array.isArray(e) ? e : [e, {}]);
 		}
-		console.log({ values });
+		// console.warn({ values });
 		if (this.isCompleted || !this.display) return;
 
 		const v = values[0][0];
@@ -276,10 +279,17 @@ export default class Progress {
 			.replace('{percent}', percent)
 			.replace('{rate}', rate)
 			.replace('{value}', v + '')
-			.replace(/{label}(\s?)/, label.length ? (label + '$1') : '');
+			.replace(/(\s?){label}(\s?)/, label.length ? ('$1' + label + '$2') : '');
 
 		// compute the available space (non-zero) for the bar
-		let availableSpace = Math.max(0, this.ttyColumns - updateText.replace('{bar}', '').length);
+		// * `stringWidth()` instead of `.length` to correctly count visual character column width of string, ignoring ANSI escapes
+		// ...eg, `\u{ff0a}` == "full-width asterisk" is otherwise incorrectly counted as a single character column wide
+		// ...eg, `0x1b[m*` == ANSI reset + '*' is otherwise incorrectly counted as a four character columns wide
+		let availableSpace = Math.max(
+			0,
+			// this.ttyColumns - updateText.replace('{bar}', '').length,
+			this.ttyColumns - stringWidth(updateText.replace('{bar}', '')),
+		);
 		if (availableSpace && isWinOS) availableSpace -= 1;
 
 		const width = Math.min(this.progressBarWidthMax, availableSpace);
@@ -288,6 +298,7 @@ export default class Progress {
 		const preciseBar = options.barSymbolIntermediate ?? this.barSymbolIntermediate;
 		const precision = preciseBar.length > 1;
 
+		// ToDO: deal correctly with unicode character variable widths
 		// :bar
 		const completeLength = width * v / goal;
 		const roundedCompleteLength = Math.floor(completeLength);
