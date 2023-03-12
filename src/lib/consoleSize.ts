@@ -18,6 +18,7 @@
 
 // * reference 'deno.unstable' to include "unstable" types for `deno check ...` and `deno run --check ...`
 // ref: [Deno ~ TS configuration](https://deno.land/manual@v1.31.2/advanced/typescript/configuration) @@ <https://archive.is/SdtbZ>
+// ref: [TypeScript ~ triple slash directives](https://www.typescriptlang.org/docs/handbook/triple-slash-directives.html) @@ <https://archive.is/26tvA>
 /// <reference lib="deno.unstable" />
 // * alternatively, use `// @ts-nocheck Bypass static errors for missing --unstable.` at the top of the file to disable static checks.
 
