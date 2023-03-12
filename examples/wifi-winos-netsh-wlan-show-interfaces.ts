@@ -14,7 +14,7 @@
 
 // ref: <https://www.juniper.net/documentation/en_US/junos-space-apps/network-director3.7/topics/concept/wireless-ssid-bssid-essid.html> @@ <https://archive.is/gtmDY>
 
-import * as Colors from 'https://deno.land/std@0.126.0/fmt/colors.ts';
+import * as $colors from 'https://deno.land/std@0.126.0/fmt/colors.ts';
 import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.ts';
 
 export const decoder = new TextDecoder(); // default == 'utf=8'
@@ -151,19 +151,29 @@ const qualityLevels = [
 	{
 		dBm: -50,
 		quality: 'excellent',
-		signal: Colors.bgGreen(' '),
-		background: Colors.bgWhite(' '),
+		signal: $colors.bgGreen(' '),
+		background: $colors.bgWhite(' '),
 	},
-	{ dBm: -60, quality: 'good', signal: Colors.bgGreen(' '), background: Colors.bgWhite(' ') },
+	{ dBm: -60, quality: 'good', signal: $colors.bgGreen(' '), background: $colors.bgWhite(' ') },
 	{
 		dBm: -67,
 		quality: 'reliable',
-		signal: Colors.bgCyan(' '),
-		background: Colors.bgWhite(' '),
+		signal: $colors.bgCyan(' '),
+		background: $colors.bgWhite(' '),
 	},
-	{ dBm: -70, quality: 'weak', signal: Colors.bgMagenta(' '), background: Colors.bgYellow(' ') },
-	{ dBm: -80, quality: 'unreliable', signal: Colors.bgRed(' '), background: Colors.bgYellow(' ') },
-	{ dBm: -90, quality: 'bad', signal: Colors.bgBrightRed(' '), background: Colors.bgMagenta(' ') },
+	{ dBm: -70, quality: 'weak', signal: $colors.bgMagenta(' '), background: $colors.bgYellow(' ') },
+	{
+		dBm: -80,
+		quality: 'unreliable',
+		signal: $colors.bgRed(' '),
+		background: $colors.bgYellow(' '),
+	},
+	{
+		dBm: -90,
+		quality: 'bad',
+		signal: $colors.bgBrightRed(' '),
+		background: $colors.bgMagenta(' '),
+	},
 ];
 
 function qualityLevelInfo(dBm: number) {
@@ -240,6 +250,10 @@ const fetchFn = async function (myID = fetchIntervalID) {
 		const qualityLevel = qualityLevelInfo(dBm);
 		// console.warn({ signalQuality, dBm, qualityLevel });
 		const prefix = `${wifiInterfaceData?.[0]?.get('@')} :: ${
+			// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ::\x1b[m*:: ${
+			// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ::😀\u{fe0e}:: ${
+			// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ::😀\u{fe0e}:: ${
+			// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ${$colors.green('::')}\u{ff0a}:: ${
 			wifiInterfaceData?.[0]?.get('Name') ?? 'unknown'
 		} @ ${dBm.toFixed(1)} dBm`;
 		// const suffix = `${wifiInterfaceData?.[0]?.get('Name')}`;
