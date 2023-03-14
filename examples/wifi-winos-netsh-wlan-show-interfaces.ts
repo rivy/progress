@@ -185,14 +185,18 @@ function qualityLevelInfo(dBm: number) {
 const nReadings = /* 10 */ Infinity;
 // const arrayForWhat: Map<string, string>[] = [];
 
-const writer = Deno.openSync('CONOUT$', { create: true, write: true });
-// console.warn({ writer, info: writer.statSync() });
+const writer = Deno.openSync('CONOUT$', {
+	/* `read` permission required to ID as TTY by `Deno.isatty()` (see GH:denoland/deno#18168) */
+	read: true,
+	write: true,
+});
+// console.warn({ writer, /* info: writer.statSync(),  */ isTTY: Deno.isatty(writer.rid) });
 // writeAllSync(writer, new TextEncoder().encode('Test to CONOUT$\n'));
 const progress = new Progress({
 	title: 'WiFi Signals',
 	// completeTemplate: 'done',
 	autoComplete: false,
-	displayAlways: true,
+	// displayAlways: true, // unneeded iff `read` permission is used for `writer` (currently, 'CONOUT$')
 	hideCursor: true,
 	writer,
 });
