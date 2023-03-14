@@ -41,6 +41,10 @@ import * as $semver from 'https://deno.land/x/semver@v1.4.0/mod.ts';
 const isWinOS = Deno.build.os === 'windows';
 let exit_requested = false;
 
+function delay(ms = 0) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Open a file specified by `path`, using `options`.
  * * _`no-throw`_ function (returns `undefined` upon any error)
  * @returns an instance of `Deno.FsFile`
@@ -54,8 +58,45 @@ function denoOpenSyncNT(path: string | URL, options?: Deno.OpenOptions) {
 	}
 }
 
+async function discardInput(reader_?: Deno.Reader & Deno.ReaderSync & { rid: number }) {
+	const reader = (reader_ != null)
+		? reader_
+		: (isTTY(Deno.stdin.rid) ? Deno.stdin : Deno.openSync('CONIN$')) ?? Deno.stdin;
+	// const reader = (reader_ != null) ? reader_ : Deno.stdin;
+	if (isTTY(reader.rid)) {
+		const encoder = new TextEncoder();
+		// Deno.stdout.close();
+		await Deno.stdout.write(encoder.encode('\x1b[8m'));
+		// read/discard available stdin input (for up to 10 ms); heuristic time to read all available keyboard input
+		if (isTTY(Deno.stdin.rid)) Deno.stdin.setRaw(true);
+		const buffer = new Uint8Array(100);
+		let n: number | null = null;
+		do {
+			// const _ = reader.readSync(buffer);
+			n = await Promise.any([reader.read(buffer), delay(10).then((_) => 0)]).catch((_) => null);
+		} while (n != null && n > 0);
+		if (isTTY(Deno.stdin.rid)) Deno.stdin.setRaw(false);
+		Deno.stdout.writeSync(encoder.encode('\x1b[0m'));
+	}
+}
+
+/** Determine if resource (`rid`) is a TTY (a terminal).
+ * * _`no-throw`_ function (returns `false` upon any error)
+ * @param rid ~ resource ID
+ * @tags no-throw
+ */
+function isTTY(rid: number) {
+	// no-throw `Deno.isatty(..)`
+	try {
+		return Deno.isatty(rid);
+	} catch {
+		return false;
+	}
+}
+
 // restore cursor display on console (regardless of process exit path)
 const ansiCSI = { showCursor: '\x1b[?25h', hideCursor: '\x1b[?25l', clearEOL: '\x1b[0K' };
+
 ['unload'].forEach((eventType) =>
 	addEventListener(eventType, (_: Event) => {
 		// ref: https://unix.stackexchange.com/questions/60641/linux-difference-between-dev-console-dev-tty-and-dev-tty0
@@ -269,6 +310,7 @@ const fetchFn = async function (myID = fetchIntervalID) {
 	}
 	if (exit_requested) {
 		progress.complete();
+		await discardInput();
 		Deno.exit(0);
 	}
 };
