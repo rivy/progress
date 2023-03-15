@@ -19,6 +19,7 @@ const lcmOfAll = (ns: number[]) => ns.reduce(lcm, 1);
 
 const cliSpinnerNames = Object.keys(cliSpinners);
 const cliSpinnerFrameSizes = cliSpinnerNames.map((name) =>
+	// deno-lint-ignore no-explicit-any
 	(cliSpinners as any)[name].frames.length
 );
 
