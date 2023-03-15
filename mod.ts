@@ -1,6 +1,6 @@
 import { bgGreen, bgWhite, sprintf, writeAllSync } from './deps.ts';
 
-// import { cliSpinners as _ } from './deps.ts';
+// import { cliSpinners, cliSpinnersFrameLCM } from './deps.ts';
 import { stringWidth } from './deps.ts';
 // import { GraphemeSplitter as _ } from './deps.ts';
 
@@ -67,27 +67,29 @@ const ttySize = await consoleSize(); // async global b/c `Deno.consoleSize()` lo
 // }
 
 interface renderConfigOptions {
+	autoCompleteOnAllComplete?: boolean;
 	clearAllOnComplete?: boolean;
 	displayAlways?: boolean;
 	hideCursor?: boolean;
-	ttyColumns?: number;
 	minRenderInterval?: number;
 	title?: string | string[]; // ToDO: string | string[]
+	ttyColumns?: number;
 	writer?: Deno.WriterSync & { rid: number };
 }
 
 interface updateOptions {
-	goal?: number;
-	label?: string;
+	autoComplete?: boolean;
 	barSymbolComplete?: string;
 	barSymbolIncomplete?: string;
 	barSymbolIntermediate?: string[];
 	clearOnComplete?: boolean;
 	completeTemplate?: string | null;
+	goal?: number;
+	isComplete?: boolean;
+	label?: string;
 	progressBarWidthMax?: number;
 	progressBarWidthMin?: number;
 	progressTemplate?: string;
-	autoComplete?: boolean;
 }
 
 type ProgressConstructionOptions = updateOptions & renderConfigOptions;
@@ -102,7 +104,7 @@ export default class Progress {
 	private display = true;
 	private isCompleted = false;
 	private startTime = Date.now();
-	private priorUpdates: (string | null)[] = [];
+	private priorLines: { text: string | null; completed: boolean }[] = [];
 	private priorUpdateTime = 0;
 	// private renderFrame = 0; // for spinners
 
@@ -130,15 +132,17 @@ export default class Progress {
 	constructor({
 		goal = 100,
 		label = '',
+		autoComplete = true,
 		barSymbolComplete = bgGreen(' '),
 		barSymbolIncomplete = bgWhite(' '),
 		barSymbolIntermediate = [],
 		clearOnComplete = false,
 		completeTemplate = null,
+		isComplete = false,
 		progressBarWidthMax = 50, // characters
 		progressBarWidthMin = 10, // characters
 		progressTemplate = '{label} {percent} {bar} {elapsed} {value}/{goal}',
-		autoComplete = true,
+		autoCompleteOnAllComplete = true,
 		clearAllOnComplete = true,
 		displayAlways = false,
 		hideCursor = false,
@@ -148,19 +152,21 @@ export default class Progress {
 		writer = Deno.stderr,
 	}: ProgressConstructionOptions = {}) {
 		this.defaultUpdateSettings = {
-			goal,
-			label,
+			autoComplete,
 			barSymbolComplete,
 			barSymbolIntermediate: barSymbolIntermediate.concat(barSymbolComplete),
 			barSymbolIncomplete,
 			clearOnComplete,
 			completeTemplate,
+			goal,
+			isComplete,
+			label,
 			progressBarWidthMax,
 			progressBarWidthMin,
 			progressTemplate,
-			autoComplete,
 		};
 		this.renderSettings = {
+			autoCompleteOnAllComplete,
 			clearAllOnComplete,
 			displayAlways,
 			hideCursor,
@@ -195,6 +201,7 @@ export default class Progress {
 	// 	this.ttyColumns = ttySize(writer.rid)?.columns ?? 80;
 	// }
 
+	// ToDO: add ability for elements of update array to be null/undefined as NOOP for the corresponding Progress display line
 	/**
 	 * update/render progress
 	 *
@@ -206,14 +213,6 @@ export default class Progress {
 	 *   - `symbolIncomplete` - incomplete symbol
 	 *   - `symbolIntermediate` - intermediate symbols
 	 */
-	// ToDO: overload and allow...
-	// `update(number, options: updateOptions = {})` => update first progress line (note: two arguments)
-	// `update(u: ProgressUpdateObject /* { number, options? } */)` => (alternate form) update first progress line
-	// `update(number[])` => update first N progress lines
-	// `update(u: ProgressUpdateObject[] /* { number, options? }[] */)` => update first N progress lines
-	// update(u: number, options?: unknown): void;
-	// update([number, updateOptions][]): void;
-	// update(v: number, options: updateOptions = {}): void {
 	update(_value_: number, _options_?: updateOptions): void;
 	update(_updates_: (number | [number, updateOptions?])[]): void;
 	update(updates_: number | (number | [number, updateOptions?])[], options_?: updateOptions): void {
@@ -232,31 +231,51 @@ export default class Progress {
 
 		// const priorBlockHeight = this.priorUpdates.length;
 		// const updates_n = updates.length;
-		this.#cursorToBlockTopLeft();
-		const n = 0;
+		const nextLines: { text: string | null; completed: boolean }[] = [];
 
-		const value = updates[n][0];
-		const options = updates[n][1] ?? {};
+		// ToDO: gate for prior completion to avoid unneeded rendering (and incorrect further rendering [eg, of elapsed time])
+		// ToDO: implement text clearing (of individual lines and entire display block)
 
-		const { updateText, finished } = this.#renderLine(value, options);
+		// logic thoughts ...
+		// * if updates.length == priorLines.length ...
+		// * if updates.length < priorLines.length ...
+		// * if updates.length > priorLines.length ...
 
-		if (updateText !== this.priorUpdates[n]) {
-			if (updateText != null) this.#writeLine(updateText);
-			this.priorUpdates[n] = updateText;
+		let allComplete = true;
+		for (let idx = 0; idx < updates.length; idx++) {
+			const value = updates[idx][0];
+			const options = updates[idx][1] ?? {};
+			const { updateText, completed } = this.#renderLine(value, options);
+			nextLines[idx] = { text: updateText, completed };
+			allComplete = allComplete && completed;
 		}
 
-		if (finished && this.defaultUpdateSettings.autoComplete) this.complete();
+		this.#cursorToBlockTopLeft();
+		for (let idx = 0; idx < updates.length; idx++) {
+			if (nextLines[idx] !== this.priorLines[idx]) {
+				const text = nextLines[idx].text;
+				if (text != null) this.#writeLine(text);
+				this.priorLines[idx] = nextLines[idx];
+			}
+			const lastLineToRender = (idx == (updates.length - 1));
+			if (!lastLineToRender) this.#cursorToNextLine();
+		}
+		if (allComplete && this.renderSettings.autoCompleteOnAllComplete) this.complete();
 	}
 
 	#renderLine(v: number, options: updateOptions) {
-		if ((isNaN(v)) || (v < 0)) {
-			throw new Error(`progress: value must be a number which is greater than or equal to 0`);
-		}
+		// if ((isNaN(v)) || (v < 0)) {
+		// 	throw new Error(`progress: value must be a number which is greater than or equal to 0`);
+		// }
 
 		const now = Date.now();
 		const age = now - this.startTime; // (in ms)
 
 		const goal = options.goal ?? this.defaultUpdateSettings.goal;
+
+		if ((isNaN(v)) || (v < 0)) v = 0;
+		if (v > goal) v = goal;
+
 		const finished = v >= goal;
 
 		const elapsed = sprintf(
@@ -301,21 +320,23 @@ export default class Progress {
 
 		// {elapsed} {eta} {goal} {percent} {rate} {value} {label} {bar}
 		const label = options.label ?? this.defaultUpdateSettings.label;
-		const template = finished
-			? (options.completeTemplate ?? this.defaultUpdateSettings.completeTemplate)
-			: (options.progressTemplate ?? this.defaultUpdateSettings.progressTemplate);
+		const template =
+			(finished
+				? (options.completeTemplate ?? this.defaultUpdateSettings.completeTemplate)
+				: undefined) ?? options.progressTemplate ?? this.defaultUpdateSettings.progressTemplate;
 		let updateText = null;
 		if (template != null) {
 			updateText = template
-				.replace('{elapsed}', elapsed)
-				.replace('{eta}', eta)
-				.replace('{goal}', goal + '')
-				.replace('{percent}', percent)
-				.replace('{rate}', rate)
-				.replace('{value}', v + '')
-				.replace(/(\s?){label}(\s?)/, label.length ? ('$1' + label + '$2') : '');
+				.replaceAll('{elapsed}', elapsed)
+				.replaceAll('{eta}', eta)
+				.replaceAll('{goal}', goal + '')
+				.replaceAll('{percent}', percent)
+				.replaceAll('{rate}', rate)
+				.replaceAll('{value}', v + '')
+				.replaceAll(/(\s?){label}(\s?)/g, label.length ? ('$1' + label + '$2') : '');
 
-			// compute the available space (non-negative) for the bar
+			// compute the available space (non-negative) for a bar
+			// * note: b/c of the flexible size, only one `{bar}` is supported and only the first is replaced
 			// * `stringWidth()` instead of `.length` to correctly count visual character column width of string, ignoring ANSI escapes
 			// ...eg, `\u{ff0a}` == "full-width asterisk" is otherwise incorrectly counted as a single character column wide
 			// ...eg, `0x1b[m*` == ANSI reset + '*' is otherwise incorrectly counted as a four character columns wide
@@ -352,7 +373,7 @@ export default class Progress {
 			updateText = updateText.replace('{bar}', complete + precise + incomplete);
 		}
 
-		return { updateText, finished };
+		return { updateText, completed: finished };
 	}
 
 	/**
@@ -377,11 +398,12 @@ export default class Progress {
 	 * @param message The message to write
 	 */
 	log(message: string | number): void {
+		// ToDO: minimize log flash
 		if (this.renderSettings.hideCursor) this.#hideCursor();
 		this.#writeLine(`${message}`);
 		this.#cursorToNextLine();
-		for (const line of this.priorUpdates) {
-			this.#writeLine(line ?? '');
+		for (const line of this.priorLines) {
+			this.#writeLine(line.text ?? '');
 		}
 		// if (!this.hideCursor) this.#showCursor();
 	}
@@ -410,7 +432,7 @@ export default class Progress {
 	/** Move cursor to beginning of current line */
 	#cursorToBlockTopLeft() {
 		this.#cursorToLineStart();
-		this.#cursorUp(this.priorUpdates.length - 1);
+		this.#cursorUp(this.priorLines.length - 1);
 	}
 
 	#cursorUp(nRows = 1) {
