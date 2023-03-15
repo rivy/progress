@@ -3,7 +3,7 @@ import Progress from '../mod.ts';
 const label = 'interval:';
 const goal = 100;
 
-const progress = new Progress({ label, goal });
+const progress = new Progress({ label, goal /* , hideCursor: true */ });
 
 let completed = 0;
 

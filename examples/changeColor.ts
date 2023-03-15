@@ -3,7 +3,11 @@ import Progress from '../mod.ts';
 
 const goal = 100;
 
-const progress = new Progress({ goal, symbolComplete: red('='), symbolIncomplete: yellow('-') });
+const progress = new Progress({
+	goal,
+	barSymbolComplete: red('='),
+	barSymbolIncomplete: yellow('-'),
+});
 
 let completed = 0;
 
@@ -12,8 +16,8 @@ function run() {
 		if (completed >= 20) {
 			progress.update(completed++, {
 				// ==> here
-				symbolComplete: green('='),
-				symbolIncomplete: '-',
+				barSymbolComplete: green('='),
+				barSymbolIncomplete: '-',
 				// <== here
 			});
 		} else {

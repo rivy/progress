@@ -11,7 +11,7 @@ function run() {
 	if (completed <= goal) {
 		progress.update(completed++, {
 			// ==> here
-			symbolComplete: bgRgb24(' ', { r: 128, g: completed / goal * 255, b: 0 }),
+			barSymbolComplete: bgRgb24(' ', { r: 128, g: completed / goal * 255, b: 0 }),
 			// <== here
 		});
 

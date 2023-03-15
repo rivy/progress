@@ -1,14 +1,14 @@
-import { MultiProgressBar } from '../mod.ts';
+import Progress from '../mod.ts';
 
 const title = 'download files';
 const total = 100;
 
-const bars = new MultiProgressBar({
+const bars = new Progress({
 	title,
-	clear: true,
-	complete: '=',
-	incomplete: '-',
-	display: '[:bar] :text :percent :time :completed/:total',
+	clearOnComplete: true,
+	barSymbolComplete: '=',
+	barSymbolIncomplete: '-',
+	progressTemplate: '[{bar}] {label} {percent} {elapsed} {value}/{goal}',
 });
 
 let completed1 = 0;
@@ -20,11 +20,11 @@ function downloading() {
 		completed1 += 1;
 		completed2 += 3;
 		completed3 += 2;
-		bars.render([{ completed: completed1, total, text: 'file1', complete: '*', incomplete: '.' }, {
-			completed: completed2,
-			total,
-			text: 'file2',
-		}, { completed: completed3, total, text: 'file3' }]);
+		bars.update([
+			[completed1, { label: 'file1', barSymbolComplete: '*', barSymbolIncomplete: '.' }],
+			[completed2, { label: 'file2' }],
+			[completed3, { label: 'file3' }],
+		]);
 
 		setTimeout(function () {
 			downloading();

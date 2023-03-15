@@ -1,18 +1,25 @@
-import { MultiProgressBar } from '../mod.ts';
+// ToDO: add keyboard control using cliffy code for a keyboard consumer
+// ToDO: add SIGBREAK handler to enable smooth/soft exits with restoration of cursor and cooked input mode
+
+import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.ts';
+
+import Progress from '../mod.ts';
 
 const title = 'download files';
 const total = 100;
 
-const bars = new MultiProgressBar({
+const bars = new Progress({
 	title,
 	// clear: true,
-	complete: '=',
-	incomplete: '-',
-	display: '[:bar] :text :percent :time :completed/:total',
+	barSymbolComplete: '=',
+	barSymbolIncomplete: '-',
+	progressTemplate: '[{bar}] {label} {percent} {elapsed} {value}/{goal}',
 });
 
 let completed1 = 0;
 let completed2 = 0;
+
+// spell-checker:ignore (options) cbreak
 
 // ref: <https://cliffy.io/keycode> , <https://cliffy.io/keypress>
 // ref: [CTRL+C (in C++)](https://github.com/evgenykislov/ctrl-c)
@@ -24,31 +31,30 @@ let completed2 = 0;
 // ref: [up down left right don't response](https://github.com/c4spar/deno-cliffy/issues/272)
 // ref: [Presses of special keys are not detectable by Deno on Window](https://github.com/denoland/deno/issues/5945)
 
-import { setHandler } from 'https://deno.land/x/ctrlc@v0.1.2/mod.ts';
+// import { setHandler } from 'https://deno.land/x/ctrlc@v0.1.2/mod.ts';
 
-const ctrlC = setHandler(() => {
-	bars.console('caught CTRL+C...');
-});
+// const ctrlC = setHandler(() => {
+// 	bars.console('caught CTRL+C...');
+// });
 // ctrlC.dispose();
 
 function downloading() {
 	if (completed1 <= total || completed2 <= total) {
 		completed1 += 1;
 		completed2 += 2;
-		bars.render([{ completed: completed1, total, text: 'file1', complete: '*', incomplete: '.' }, {
-			completed: completed2,
-			total,
-			text: 'file2',
-		}]);
+		bars.update([
+			[completed1, { label: 'file1', barSymbolComplete: '*', barSymbolIncomplete: '.' }],
+			[completed2, { label: 'file2' }],
+		]);
 		setTimeout(function () {
 			downloading();
 		}, 100);
 	} else console.log('DONE');
 }
 
-window.addEventListener('unload', (e: Event): void => {
+addEventListener('unload', (_: Event): void => {
 	console.log('onclose');
-	Deno.writeAllSync(Deno.stdout, new TextEncoder().encode('\x1b[?25h'));
+	writeAllSync(Deno.stdout, new TextEncoder().encode('\x1b[?25h'));
 	console.log('cursor restored');
 });
 

@@ -1,4 +1,4 @@
-import { bgCyan, bgMagenta } from 'https://deno.land/std@0.74.0/fmt/colors.ts';
+import { bgCyan /* bgMagenta */ } from 'https://deno.land/std@0.74.0/fmt/colors.ts';
 import Progress from '../mod.ts';
 
 const goal = 100;
@@ -12,7 +12,7 @@ function run() {
 		if (completed >= 20) {
 			progress.update(completed++, {
 				// ==> here
-				symbolIncomplete: bgCyan(' '),
+				barSymbolIncomplete: bgCyan(' '),
 				// <== here
 			});
 		} else {

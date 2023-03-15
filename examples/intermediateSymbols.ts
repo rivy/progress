@@ -8,7 +8,7 @@ const progress = new Progress({
 	// Note: on Windows, if UTF-8 is not the default encoding for the terminal, such characters will not be displayed as expected.
 	// ==> here
 	// symbolComplete: bgGreen('*'),
-	symbolIntermediate: [
+	barSymbolIntermediate: [
 		bgWhite(green('▏')),
 		bgWhite(green('▎')),
 		bgWhite(green('▍')),

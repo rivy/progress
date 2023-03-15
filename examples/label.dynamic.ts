@@ -5,7 +5,7 @@ const goal = 100;
 const progress = new Progress({
 	goal,
 	// ==> here
-	progressTemplate: ':bar :label',
+	progressTemplate: '{bar} {label}',
 	// <== here
 });
 
