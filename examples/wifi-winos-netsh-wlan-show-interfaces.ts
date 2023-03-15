@@ -14,6 +14,8 @@
 
 // ref: <https://www.juniper.net/documentation/en_US/junos-space-apps/network-director3.7/topics/concept/wireless-ssid-bssid-essid.html> @@ <https://archive.is/gtmDY>
 
+// [Linux WiFi statistics](https://www.cyberciti.biz/tips/linux-find-out-wireless-network-speed-signal-strength.html) @@ <https://archive.is/jDYLx>
+
 import * as $colors from 'https://deno.land/std@0.126.0/fmt/colors.ts';
 import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.ts';
 
