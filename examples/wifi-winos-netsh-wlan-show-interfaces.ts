@@ -1,6 +1,6 @@
 // `deno run --allow-run $0`
 
-// spell-checker:ignore (libs) denque (shell/cmd) netsh wlan CONOUT (WLAN) BSSID
+// spell-checker:ignore (libs) denque (shell/cmd) netsh wlan CONIN CONOUT (WLAN) BSSID
 
 // ToDO: add input checking for ESC/CR/q or Q and swallow
 
@@ -16,6 +16,8 @@
 
 import * as $colors from 'https://deno.land/std@0.126.0/fmt/colors.ts';
 import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.ts';
+
+import { keypress, KeyPressEvent } from 'https://deno.land/x/cliffy@v0.25.7/keypress/mod.ts';
 
 export const decoder = new TextDecoder(); // default == 'utf=8'
 // export const encoder = new TextEncoder(); // *always* 'utf-8'
@@ -39,11 +41,17 @@ import Progress from './../mod.ts';
 import * as $semver from 'https://deno.land/x/semver@v1.4.0/mod.ts';
 
 const isWinOS = Deno.build.os === 'windows';
+// const consoleInputFile = isWinOS ? 'CONIN$' : '/dev/tty';
+const consoleOutputFile = isWinOS ? 'CONOUT$' : '/dev/tty';
+// console.warn({ isWinOS, consoleInputFile, consoleOutputFile });
+
 let exit_requested = false;
 
-function delay(ms = 0) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
+//===
+
+// function delay(ms = 0) {
+// 	return new Promise((resolve) => setTimeout(resolve, ms));
+// }
 
 /** Open a file specified by `path`, using `options`.
  * * _`no-throw`_ function (returns `undefined` upon any error)
@@ -58,27 +66,27 @@ function denoOpenSyncNT(path: string | URL, options?: Deno.OpenOptions) {
 	}
 }
 
-async function discardInput(reader_?: Deno.Reader & Deno.ReaderSync & { rid: number }) {
-	const reader = (reader_ != null)
-		? reader_
-		: (isTTY(Deno.stdin.rid) ? Deno.stdin : Deno.openSync('CONIN$')) ?? Deno.stdin;
-	// const reader = (reader_ != null) ? reader_ : Deno.stdin;
-	if (isTTY(reader.rid)) {
-		const encoder = new TextEncoder();
-		// Deno.stdout.close();
-		await Deno.stdout.write(encoder.encode('\x1b[8m'));
-		// read/discard available stdin input (for up to 10 ms); heuristic time to read all available keyboard input
-		if (isTTY(Deno.stdin.rid)) Deno.stdin.setRaw(true);
-		const buffer = new Uint8Array(100);
-		let n: number | null = null;
-		do {
-			// const _ = reader.readSync(buffer);
-			n = await Promise.any([reader.read(buffer), delay(10).then((_) => 0)]).catch((_) => null);
-		} while (n != null && n > 0);
-		if (isTTY(Deno.stdin.rid)) Deno.stdin.setRaw(false);
-		Deno.stdout.writeSync(encoder.encode('\x1b[0m'));
-	}
-}
+// async function discardInput(reader_?: Deno.Reader & Deno.ReaderSync & { rid: number }) {
+// 	const reader = (reader_ != null)
+// 		? reader_
+// 		: (isTTY(Deno.stdin.rid) ? Deno.stdin : Deno.openSync(consoleInputFile)) ?? Deno.stdin;
+// 	// const reader = (reader_ != null) ? reader_ : Deno.stdin;
+// 	if (isTTY(reader.rid)) {
+// 		const encoder = new TextEncoder();
+// 		// Deno.stdout.close();
+// 		await Deno.stdout.write(encoder.encode('\x1b[8m'));
+// 		// read/discard available stdin input (for up to 10 ms); heuristic time to read all available keyboard input
+// 		if (isTTY(Deno.stdin.rid)) Deno.stdin.setRaw(true);
+// 		const buffer = new Uint8Array(100);
+// 		let n: number | null = null;
+// 		do {
+// 			// const _ = reader.readSync(buffer);
+// 			n = await Promise.any([reader.read(buffer), delay(10).then((_) => 0)]).catch((_) => null);
+// 		} while (n != null && n > 0);
+// 		if (isTTY(Deno.stdin.rid)) Deno.stdin.setRaw(false);
+// 		Deno.stdout.writeSync(encoder.encode('\x1b[0m'));
+// 	}
+// }
 
 /** Determine if resource (`rid`) is a TTY (a terminal).
  * * _`no-throw`_ function (returns `false` upon any error)
@@ -97,35 +105,58 @@ function isTTY(rid: number) {
 // restore cursor display on console (regardless of process exit path)
 const ansiCSI = { showCursor: '\x1b[?25h', hideCursor: '\x1b[?25l', clearEOL: '\x1b[0K' };
 
-['unload'].forEach((eventType) =>
-	addEventListener(eventType, (_: Event) => {
-		// ref: https://unix.stackexchange.com/questions/60641/linux-difference-between-dev-console-dev-tty-and-dev-tty0
-		const consoleFileName = isWinOS ? 'CONOUT$' : '/dev/tty';
-		const file = denoOpenSyncNT(consoleFileName, { write: true });
-		if (file != null) {
-			writeAllSync(file, (new TextEncoder()).encode(ansiCSI.showCursor));
-			Deno.close(file.rid);
-		}
-	})
-);
+//===
+
+// start keypress/input consumer (avoid post-process residual keyboard input)
+keypress().addEventListener('keydown', (event: KeyPressEvent) => {
+	// console.log('# event');
+	if (event.key === 'q') {
+		console.warn(`'${event.key.toLocaleUpperCase()}' pressed; requesting exit`);
+		// Stop event loop and iterator.
+		// keypress().dispose();
+		exit_requested = true;
+	}
+	if (event.ctrlKey && event.key === 'c') {
+		console.warn(`CTRL-${event.key.toLocaleUpperCase()} pressed; requesting exit`);
+		// Stop event loop and iterator.
+		// keypress().dispose();
+		exit_requested = true;
+	}
+});
 
 try {
-	// catch SIGBREAK and SIGINT to avoid abrupt process exits
+	// catch SIGBREAK (usually `CTRL-ScrollLock` or `CTRL-Pause`) to avoid abrupt process exits
 	// * use `exit_requested` as an orderly exit signal to the main application loop
 	// * note: for success, requires Deno v1.23.0+ (ref: <https://github.com/denoland/deno/pull/14694> , <https://github.com/denoland/deno/releases/tag/v1.23.0>)
 	const s: Deno.Signal[] = (isWinOS && ($semver
 			.satisfies(Deno.version.deno, '>=1.23.0'))
 		? ['SIGBREAK'] as Deno.Signal[]
-		: [])
-		.concat(['SIGINT']);
+		: []);
+	// .concat(['SIGINT']); // CTRL-C (handled by keyboard input consumer)
 	s.forEach((signalType) =>
 		Deno.addSignalListener(signalType, () => {
+			console.warn(`${signalType} caught; requesting exit`);
 			exit_requested = true;
 		})
 	);
 } catch (_e) {
 	// console.warn('Caught exception...', { _e });
 }
+
+['unload'].forEach((eventType) =>
+	addEventListener(eventType, (_: Event) => {
+		// ref: https://unix.stackexchange.com/questions/60641/linux-difference-between-dev-console-dev-tty-and-dev-tty0
+		// const consoleFileName = isWinOS ? 'CONOUT$' : '/dev/tty';
+		const file = denoOpenSyncNT(consoleOutputFile, { read: true, write: true });
+		if (file != null) {
+			writeAllSync(file, (new TextEncoder()).encode(ansiCSI.showCursor));
+			Deno.close(file.rid);
+		}
+		// await discardInput();
+		keypress().dispose(); // stop keypress() event loop and iterator
+		if (isTTY(Deno.stdin.rid)) Deno.stdin.setRaw(false);
+	})
+);
 
 //===
 
@@ -226,7 +257,7 @@ function qualityLevelInfo(dBm: number) {
 const nReadings = /* 10 */ Infinity;
 // const arrayForWhat: Map<string, string>[] = [];
 
-const writer = Deno.openSync('CONOUT$', {
+const writer = Deno.openSync(consoleOutputFile, {
 	/* `read` permission required to ID as TTY by `Deno.isatty()` (see GH:denoland/deno#18168) */
 	read: true,
 	write: true,
@@ -310,7 +341,6 @@ const fetchFn = async function (myID = fetchIntervalID) {
 	}
 	if (exit_requested) {
 		progress.complete();
-		await discardInput();
 		Deno.exit(0);
 	}
 };
