@@ -1,3 +1,20 @@
+// ref: [progress (`deno`)](https://github.com/deno-library/progress)
+// ref: [progressbar (`deno)](https://github.com/jakobhellermann/deno-progressbar)
+// ref: [mpb (`go`)](https://github.com/vbauerster/mpb)
+// ref: [mutibar (`go`)](https://github.com/sethgrid/multibar)
+// ref: [](https://www.npmjs.com/package/progress)
+// ref: [](https://www.npmjs.com/package/cli-progress)
+// ref: [](https://www.npmjs.com/package/gauge)
+// ref: [](https://www.npmjs.com/package/multibar)
+// ref: [](https://www.npmjs.com/package/cli-infinity-progress)
+// ref: [](https://www.npmjs.com/package/multi-progress)
+// ref: [](https://www.npmjs.com/package/multi-progress-bars)
+
+// ref: [](https://www.npmjs.com/package/cli-spinners)
+// ref: [](https://www.npmjs.com/package/log-update)
+// ref: [](https://github.com/sindresorhus/ora)
+// ref: [](https://www.npmjs.com/package/awesome-logging)
+
 import { bgGreen, bgWhite, sprintf, writeAllSync } from './deps.ts';
 
 // import { cliSpinners, cliSpinnersFrameLCM } from './deps.ts';
@@ -5,7 +22,6 @@ import { stringWidth } from './deps.ts';
 // import { GraphemeSplitter as _ } from './deps.ts';
 
 import { consoleSize } from './src/lib/consoleSize.ts';
-export { MultiProgressBar } from './multi.ts';
 
 // ToDO: implement STDIN discarding (see https://www.npmjs.com/package/stdin-discarder; use `Deno.stdin.setRaw()`, ...)
 //   ... * note: `Deno.stdin.setRaw(false)` will need Deno version >= v1.31.2 for correct restoration of STDIN input handling (see GH:denoland/deno#17866 with fix GH:denoland/deno#17983)
@@ -16,7 +32,12 @@ const isWinOS = Deno.build.os === 'windows';
 
 // spell-checker:ignore (WinOS) CONOUT
 
-// ToDO: `cursorRest = [start, end, after, title_start?, title_end?, title_after?]`, default = after
+// ToDO: [in progress...] for bar arrangement flexibility and dynamic vertical size ... implement ID system; array position as implicit ID if not specified
+//   ... save line state to related ID and save display state for redraws
+// ToDO: implement spinners
+// ToDO: implement widgets and/or ES-6 template compatible format strings
+
+// ToDO: `cursorRest = 'after' | 'start' | 'end' | 'block_start'`, default = after
 // ToDO: ES6-template compatible format strings
 // ref: <>
 // ```js
@@ -42,29 +63,6 @@ const ansiCSI = {
 };
 
 const ttySize = await consoleSize(); // async global b/c `Deno.consoleSize()` lost functionality when stabilized (see GH:denoland/deno#17982)
-
-// interface constructorOptions {
-// 	// *default* progress line update options
-// 	goal?: number;
-// 	label?: string;
-// 	barSymbolComplete?: string;
-// 	barSymbolIncomplete?: string;
-// 	barSymbolIntermediate?: string[];
-// 	clearOnComplete?: string;
-// 	completeTemplate?: string;
-// 	progressBarWidthMax?: number;
-// 	progressBarWidthMin?: number;
-// 	progressTemplate?: string;
-// 	autoComplete?: boolean;
-// 	// render configuration settings
-// 	clearAllOnComplete?: boolean;
-// 	displayAlways?: boolean;
-// 	hideCursor?: boolean;
-// 	maxWidth?: number;
-// 	minRenderInterval?: number;
-// 	title?: string; // ToDO: string | string[]
-// 	writer?: Deno.WriterSync & { rid: number };
-// }
 
 interface renderConfigOptions {
 	autoCompleteOnAllComplete?: boolean;
@@ -92,9 +90,54 @@ interface updateOptions {
 	progressTemplate?: string;
 }
 
-type ProgressConstructionOptions = updateOptions & renderConfigOptions;
+type ProgressConstructionOptions = renderConfigOptions & /* default */ updateOptions;
 
 // type ProgressUpdateObject = { value: number; options?: updateOptions };
+
+// ToDO: add built-in soft exit reset to show cursor (and, if using keypress() to consume input, dispose() and reset to 'cooked' input mode)
+/** Open a file specified by `path`, using `options`.
+ * * _`no-throw`_ function (returns `undefined` upon any error)
+ * @returns an instance of `Deno.FsFile`
+ */
+function denoOpenSyncNT(path: string | URL, options?: Deno.OpenOptions) {
+	// no-throw `Deno.openSync(..)`
+	try {
+		return Deno.openSync(path, options);
+	} catch {
+		return undefined;
+	}
+}
+
+/** Determine if resource (`rid`) is a TTY (a terminal).
+ * * _`no-throw`_ function (returns `false` upon any error)
+ * @param rid ~ resource ID
+ * @tags no-throw
+ */
+function isTTY(rid: number) {
+	// no-throw `Deno.isatty(..)`
+	try {
+		return Deno.isatty(rid);
+	} catch {
+		return false;
+	}
+}
+
+const consoleOutputFile = isWinOS ? 'CONOUT$' : '/dev/tty';
+
+['unload'].forEach((eventType) =>
+	addEventListener(eventType, (_: Event) => {
+		// ref: https://unix.stackexchange.com/questions/60641/linux-difference-between-dev-console-dev-tty-and-dev-tty0
+		// const consoleFileName = isWinOS ? 'CONOUT$' : '/dev/tty';
+		const file = denoOpenSyncNT(consoleOutputFile, { read: true, write: true });
+		if (file != null) {
+			writeAllSync(file, (new TextEncoder()).encode(ansiCSI.showCursor));
+			Deno.close(file.rid);
+		}
+		// await discardInput();
+		// keypress().dispose(); // stop keypress() event loop and iterator
+		if (isTTY(Deno.stdin.rid)) Deno.stdin.setRaw(false);
+	})
+);
 
 // class Progress
 export default class Progress {
@@ -104,7 +147,7 @@ export default class Progress {
 	private display = true;
 	private isCompleted = false;
 	private startTime = Date.now();
-	private priorLines: { text: string | null; completed: boolean }[] = [];
+	private priorLines: { id: number | string; text: string | null; completed: boolean }[] = [];
 	private priorUpdateTime = 0;
 	// private renderFrame = 0; // for spinners
 
@@ -130,20 +173,20 @@ export default class Progress {
 	 * @param minRenderInterval  minimum time between updates in milliseconds, default: 16 ms
 	 */
 	constructor({
-		goal = 100,
-		label = '',
 		autoComplete = true,
 		barSymbolComplete = bgGreen(' '),
 		barSymbolIncomplete = bgWhite(' '),
 		barSymbolIntermediate = [],
 		clearOnComplete = false,
 		completeTemplate = null,
+		goal = 100,
 		isComplete = false,
+		label = '',
 		progressBarWidthMax = 50, // characters
 		progressBarWidthMin = 10, // characters
 		progressTemplate = '{label} {percent} {bar} {elapsed} {value}/{goal}',
 		autoCompleteOnAllComplete = true,
-		clearAllOnComplete = true,
+		clearAllOnComplete = false,
 		displayAlways = false,
 		hideCursor = false,
 		minRenderInterval = 16, // ms
@@ -213,14 +256,19 @@ export default class Progress {
 	 *   - `symbolIncomplete` - incomplete symbol
 	 *   - `symbolIntermediate` - intermediate symbols
 	 */
-	update(_value_: number, _options_?: updateOptions): void;
-	update(_updates_: (number | [number, updateOptions?])[]): void;
-	update(updates_: number | (number | [number, updateOptions?])[], options_?: updateOptions): void {
-		let updates: [number, updateOptions?][];
+	update(_value_: number, _options_?: (updateOptions & { id?: number | string })): void;
+	update(
+		_updates_: (number | [number, (updateOptions & { id?: number | string })?] | null)[],
+	): void;
+	update(
+		updates_: number | (number | [number, (updateOptions & { id?: number | string })?] | null)[],
+		options_?: (updateOptions & { id?: number | string }),
+	): void {
+		let updates: ([number, (updateOptions & { id?: number | string })?] | null)[];
 		if (!Array.isArray(updates_)) {
 			updates = [[updates_, options_]];
 		} else {
-			updates = updates_.map((e) => Array.isArray(e) ? e : [e, {}]);
+			updates = updates_.map((e) => (e != null) ? (Array.isArray(e) ? e : [e, {}]) : null);
 		}
 		// console.warn({ values });
 		if (this.isCompleted || !this.display) return;
@@ -229,32 +277,33 @@ export default class Progress {
 		const msUpdateInterval = now - this.priorUpdateTime;
 		if (msUpdateInterval < this.renderSettings.minRenderInterval) return;
 
-		// const priorBlockHeight = this.priorUpdates.length;
-		// const updates_n = updates.length;
-		const nextLines: { text: string | null; completed: boolean }[] = [];
-
-		// ToDO: gate for prior completion to avoid unneeded rendering (and incorrect further rendering [eg, of elapsed time])
-		// ToDO: implement text clearing (of individual lines and entire display block)
-
-		// logic thoughts ...
-		// * if updates.length == priorLines.length ...
-		// * if updates.length < priorLines.length ...
-		// * if updates.length > priorLines.length ...
+		const nextLines: typeof this.priorLines = [];
 
 		let allComplete = true;
 		for (let idx = 0; idx < updates.length; idx++) {
-			const value = updates[idx][0];
-			const options = updates[idx][1] ?? {};
-			const { updateText, completed } = this.#renderLine(value, options);
-			nextLines[idx] = { text: updateText, completed };
-			allComplete = allComplete && completed;
+			if (updates[idx] != null) {
+				const value = updates[idx]![0];
+				const options = updates[idx]![1] ?? {};
+				const id = options.id ?? idx;
+				const { updateText, completed } = this.priorLines[idx]?.completed
+					? { updateText: this.priorLines[idx].text, completed: this.priorLines[idx].completed }
+					: this.#renderLine(value, options);
+				nextLines[idx] = { id, text: updateText, completed };
+				allComplete &&= completed;
+			} else allComplete &&= true;
 		}
 
-		this.#cursorToBlockTopLeft();
+		this.#cursorToBlockStart();
 		for (let idx = 0; idx < updates.length; idx++) {
 			if (nextLines[idx] !== this.priorLines[idx]) {
 				const text = nextLines[idx].text;
-				if (text != null) this.#writeLine(text);
+				if (text != null) {
+					const clearOnComplete = (updates[idx] != null)
+						? (updates[idx]![1] ?? {}).clearOnComplete ?? false
+						: false;
+					const clear = clearOnComplete && nextLines[idx].completed;
+					this.#writeLine(clear ? '' : text);
+				}
 				this.priorLines[idx] = nextLines[idx];
 			}
 			const lastLineToRender = (idx == (updates.length - 1));
@@ -276,7 +325,7 @@ export default class Progress {
 		if ((isNaN(v)) || (v < 0)) v = 0;
 		if (v > goal) v = goal;
 
-		const finished = v >= goal;
+		const completed = v >= goal;
 
 		const elapsed = sprintf(
 			'%ss', /* in seconds */
@@ -321,7 +370,7 @@ export default class Progress {
 		// {elapsed} {eta} {goal} {percent} {rate} {value} {label} {bar}
 		const label = options.label ?? this.defaultUpdateSettings.label;
 		const template =
-			(finished
+			(completed
 				? (options.completeTemplate ?? this.defaultUpdateSettings.completeTemplate)
 				: undefined) ?? options.progressTemplate ?? this.defaultUpdateSettings.progressTemplate;
 		let updateText = null;
@@ -360,7 +409,7 @@ export default class Progress {
 			let precise = '';
 			if (precision) {
 				const preciseLength = completeLength - roundedCompleteLength;
-				precise = finished ? '' : preciseBar[Math.floor(preciseBar.length * preciseLength)];
+				precise = completed ? '' : preciseBar[Math.floor(preciseBar.length * preciseLength)];
 			}
 
 			const complete = new Array(roundedCompleteLength)
@@ -373,7 +422,7 @@ export default class Progress {
 			updateText = updateText.replace('{bar}', complete + precise + incomplete);
 		}
 
-		return { updateText, completed: finished };
+		return { updateText, completed };
 	}
 
 	/**
@@ -382,13 +431,14 @@ export default class Progress {
 	 */
 	complete(): void {
 		this.isCompleted = true;
-		if (this.defaultUpdateSettings.completeTemplate == null) { /* do nothing */ }
-		else if (this.defaultUpdateSettings.completeTemplate == '') {
-			this.#writeLine();
-		} else {
-			this.#writeLine(this.defaultUpdateSettings.completeTemplate);
+		if (this.renderSettings.clearAllOnComplete) {
+			for (let i = 0; i < this.priorLines.length; i++) {
+				this.#cursorToLineStart();
+				this.#writeLine();
+				this.#cursorUp();
+			}
+			this.#cursorToNextLine();
 		}
-		// this.#toNextLine();
 		this.#showCursor();
 	}
 
@@ -398,12 +448,20 @@ export default class Progress {
 	 * @param message The message to write
 	 */
 	log(message: string | number): void {
-		// ToDO: minimize log flash
 		if (this.renderSettings.hideCursor) this.#hideCursor();
+		this.#cursorToBlockStart();
+		{
+			// minimize text overwrite flashes
+			this.#cursorToNextLine(this.priorLines.length);
+			this.#cursorUp(this.priorLines.length);
+		}
 		this.#writeLine(`${message}`);
 		this.#cursorToNextLine();
-		for (const line of this.priorLines) {
+		for (let i = 0; i < this.priorLines.length; i++) {
+			const line = this.priorLines[i];
 			this.#writeLine(line.text ?? '');
+			const lastLineToRender = (i == (this.priorLines.length - 1));
+			if (!lastLineToRender) this.#cursorToNextLine();
 		}
 		// if (!this.hideCursor) this.#showCursor();
 	}
@@ -419,9 +477,11 @@ export default class Progress {
 		writeAllSync(this.renderSettings.writer, this.encoder.encode(msg));
 	}
 
-	/** Move cursor to beginning of next line (scrolls screen if needed) */
-	#cursorToNextLine() {
-		this.#writeRaw('\r\n');
+	/** Move cursor to beginning of current line */
+	#cursorToBlockStart() {
+		// NOTE: assumes cursor rests on last line
+		this.#cursorToLineStart();
+		if (this.priorLines.length > 0) this.#cursorUp(this.priorLines.length - 1);
 	}
 
 	/** Move cursor to beginning of current line */
@@ -429,15 +489,16 @@ export default class Progress {
 		this.#writeRaw('\r');
 	}
 
-	/** Move cursor to beginning of current line */
-	#cursorToBlockTopLeft() {
-		this.#cursorToLineStart();
-		this.#cursorUp(this.priorLines.length - 1);
+	/** Move cursor to beginning of next line (scrolls screen if needed) */
+	#cursorToNextLine(nLines = 1) {
+		for (let i = 0; i < nLines; i++) {
+			this.#writeRaw('\r\n');
+		}
 	}
 
-	#cursorUp(nRows = 1) {
-		if (nRows > 0) {
-			this.#writeRaw(`${ansiCSI.cursorUp.replace('{n}', `${nRows}`)}`);
+	#cursorUp(nLines = 1) {
+		if (nLines > 0) {
+			this.#writeRaw(`${ansiCSI.cursorUp.replace('{n}', `${nLines}`)}`);
 		}
 	}
 
