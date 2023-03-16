@@ -1,7 +1,7 @@
 // ref: [progress (`deno`)](https://github.com/deno-library/progress)
-// ref: [progressbar (`deno)](https://github.com/jakobhellermann/deno-progressbar)
+// ref: [progressbar (`deno)](https://github.com/jakobhellermann/deno-progressbar) // spell-checker:ignore progressbar
 // ref: [mpb (`go`)](https://github.com/vbauerster/mpb)
-// ref: [mutibar (`go`)](https://github.com/sethgrid/multibar)
+// ref: [multibar (`go`)](https://github.com/sethgrid/multibar) // spell-checker:ignore multibar
 // ref: [](https://www.npmjs.com/package/progress)
 // ref: [](https://www.npmjs.com/package/cli-progress)
 // ref: [](https://www.npmjs.com/package/gauge)
@@ -139,6 +139,12 @@ const consoleOutputFile = isWinOS ? 'CONOUT$' : '/dev/tty';
 	})
 );
 
+type CursorPosition =
+	| 'lastLineStart' // @ first character of last block line
+	| 'blockStart' // @ first character of first block line
+	| 'blockEnd' // @ *first character past* final character of last block line
+	| 'afterBlock' // start of line after block
+;
 // class Progress
 export default class Progress {
 	renderSettings: Required<renderConfigOptions>;
@@ -150,6 +156,7 @@ export default class Progress {
 	private priorLines: { id: number | string; text: string | null; completed: boolean }[] = [];
 	private priorUpdateTime = 0;
 	// private renderFrame = 0; // for spinners
+	#cursorPosition: CursorPosition = 'blockStart';
 
 	private encoder = new TextEncoder();
 
@@ -256,15 +263,13 @@ export default class Progress {
 	 *   - `symbolIncomplete` - incomplete symbol
 	 *   - `symbolIntermediate` - intermediate symbols
 	 */
-	update(_value_: number, _options_?: (updateOptions & { id?: number | string })): void;
+	update(_value_: number, _options_?: (updateOptions & { id?: string })): void;
+	update(_updates_: (number | [number, (updateOptions & { id?: string })?] | null)[]): void;
 	update(
-		_updates_: (number | [number, (updateOptions & { id?: number | string })?] | null)[],
-	): void;
-	update(
-		updates_: number | (number | [number, (updateOptions & { id?: number | string })?] | null)[],
-		options_?: (updateOptions & { id?: number | string }),
+		updates_: number | (number | [number, (updateOptions & { id?: string })?] | null)[],
+		options_?: (updateOptions & { id?: string }),
 	): void {
-		let updates: ([number, (updateOptions & { id?: number | string })?] | null)[];
+		let updates: ([number, (updateOptions & { id?: string })?] | null)[];
 		if (!Array.isArray(updates_)) {
 			updates = [[updates_, options_]];
 		} else {
@@ -293,22 +298,26 @@ export default class Progress {
 			} else allComplete &&= true;
 		}
 
-		this.#cursorToBlockStart();
-		for (let idx = 0; idx < updates.length; idx++) {
-			if (nextLines[idx] !== this.priorLines[idx]) {
-				const text = nextLines[idx].text;
-				if (text != null) {
-					const clearOnComplete = (updates[idx] != null)
-						? (updates[idx]![1] ?? {}).clearOnComplete ?? false
-						: false;
-					const clear = clearOnComplete && nextLines[idx].completed;
-					this.#writeLine(clear ? '' : text);
+		{ // update display // ToDO: revise as method
+			this.#cursorToBlockStart();
+			for (let idx = 0; idx < updates.length; idx++) {
+				if (nextLines[idx] !== this.priorLines[idx]) {
+					const text = nextLines[idx].text;
+					if (text != null) {
+						const clearOnComplete = (updates[idx] != null)
+							? (updates[idx]![1] ?? {}).clearOnComplete ?? false
+							: false;
+						const clear = clearOnComplete && nextLines[idx].completed;
+						this.#writeLine(clear ? '' : text);
+					}
+					this.priorLines[idx] = nextLines[idx];
 				}
-				this.priorLines[idx] = nextLines[idx];
+				const lastLineToRender = (idx == (updates.length - 1));
+				if (!lastLineToRender) this.#cursorToNextLine();
 			}
-			const lastLineToRender = (idx == (updates.length - 1));
-			if (!lastLineToRender) this.#cursorToNextLine();
+			this.#cursorPosition = 'blockEnd';
 		}
+
 		if (allComplete && this.renderSettings.autoCompleteOnAllComplete) this.complete();
 	}
 
@@ -462,6 +471,7 @@ export default class Progress {
 			this.#writeLine(line.text ?? '');
 			const lastLineToRender = (i == (this.priorLines.length - 1));
 			if (!lastLineToRender) this.#cursorToNextLine();
+			this.#cursorPosition = 'blockEnd';
 		}
 		// if (!this.hideCursor) this.#showCursor();
 	}
@@ -479,7 +489,7 @@ export default class Progress {
 
 	/** Move cursor to beginning of current line */
 	#cursorToBlockStart() {
-		// NOTE: assumes cursor rests on last line
+		if (this.#cursorPosition == 'blockStart') return;
 		this.#cursorToLineStart();
 		if (this.priorLines.length > 0) this.#cursorUp(this.priorLines.length - 1);
 	}
