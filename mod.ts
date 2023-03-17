@@ -215,6 +215,7 @@ export default class Progress {
 			progressBarWidthMin,
 			progressTemplate,
 		};
+		if (!Array.isArray(title)) title = [title];
 		this.renderSettings = {
 			autoCompleteOnAllComplete,
 			clearAllOnComplete,
@@ -227,6 +228,8 @@ export default class Progress {
 		};
 
 		this.display = this.renderSettings.displayAlways || Deno.isatty(writer.rid);
+
+		for (let i = 0; i < title.length; i++) this.log(title[i]);
 
 		// this.#init();
 	}
