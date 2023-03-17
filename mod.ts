@@ -30,6 +30,9 @@ import { consoleSize } from './src/lib/consoleSize.ts';
 
 const isWinOS = Deno.build.os === 'windows';
 
+const LF = '\n';
+const EOLReS = '\r?\n|\r';
+
 // spell-checker:ignore (WinOS) CONOUT
 
 // ToDO: [in progress...] for bar arrangement flexibility and dynamic vertical size ... implement ID system; array position as implicit ID if not specified
@@ -158,6 +161,7 @@ export default class Progress {
 	private priorLines: { id: number | string; text: string | null; completed: boolean }[] = [];
 	private priorUpdateTime = 0;
 	// private renderFrame = 0; // for spinners
+	private titleLines: string[];
 	#cursorPosition: CursorPosition = 'blockStart';
 
 	private encoder = new TextEncoder();
@@ -179,7 +183,7 @@ export default class Progress {
 	 * @param displayAlways  avoid TTY check on writer and always display progress, default: false
 	 * @param hideCursor  hide cursor until progress line display is complete, default: false
 	 * @param title  progress title line (static), default: undefined
-	 * @param minRenderInterval  minimum time between updates in milliseconds, default: 16 ms
+	 * @param minRenderInterval  minimum time between updates in milliseconds, default: 20 ms
 	 */
 	constructor({
 		autoComplete = true,
@@ -198,7 +202,7 @@ export default class Progress {
 		clearAllOnComplete = false,
 		displayAlways = false,
 		hideCursor = false,
-		minRenderInterval = 16, // ms
+		minRenderInterval = 20, // ms
 		title = [],
 		ttyColumns = ttySize?.columns ?? 80,
 		writer = Deno.stderr,
@@ -217,7 +221,6 @@ export default class Progress {
 			progressBarWidthMin,
 			progressTemplate,
 		};
-		if (!Array.isArray(title)) title = [title].filter((s) => s != null);
 		this.renderSettings = {
 			autoCompleteOnAllComplete,
 			clearAllOnComplete,
@@ -231,8 +234,16 @@ export default class Progress {
 
 		this.display = this.renderSettings.displayAlways || Deno.isatty(writer.rid);
 
-		for (let i = 0; i < title.length; i++) {
-			this.#writeLine(title[i]);
+		this.titleLines = (Array.isArray(title) ? title : [title]).filter((s) => s != null);
+		// * split all supplied text into lines
+		this.titleLines = (this.titleLines.length <= 0)
+			? []
+			: this.titleLines.join(LF).replace(new RegExp(`${EOLReS}\$`), '').split(
+				new RegExp(`${EOLReS}`, 'gms'),
+			);
+
+		for (let i = 0; i < this.titleLines.length; i++) {
+			this.#writeLine(this.titleLines[i]);
 			this.#cursorToNextLine();
 		}
 
@@ -277,6 +288,7 @@ export default class Progress {
 		updates_: number | (number | [number, (UpdateOptions & { id?: string })?] | null)[],
 		options_?: (UpdateOptions & { id?: string }),
 	): void {
+		if (this.isCompleted || !this.display) return;
 		let updates: ([number, (UpdateOptions & { id?: string })?] | null)[];
 		if (!Array.isArray(updates_)) {
 			updates = [[updates_, options_]];
@@ -284,11 +296,11 @@ export default class Progress {
 			updates = updates_.map((e) => (e != null) ? (Array.isArray(e) ? e : [e, {}]) : null);
 		}
 		// console.warn({ values });
-		if (this.isCompleted || !this.display) return;
 
 		const now = Date.now();
 		const msUpdateInterval = now - this.priorUpdateTime;
 		if (msUpdateInterval < this.renderSettings.minRenderInterval) return;
+		this.priorUpdateTime = now;
 
 		const nextLines: typeof this.priorLines = [];
 
@@ -308,15 +320,17 @@ export default class Progress {
 
 		{ // update display // ToDO: revise as method
 			this.#cursorToBlockStart();
+			// this.#cursorToNextLine(this.titleLines.length - 1);
 			for (let idx = 0; idx < updates.length; idx++) {
 				if (nextLines[idx] !== this.priorLines[idx]) {
+					const clearOnComplete = (updates[idx] != null)
+						? ((updates[idx]![1] ?? {}).clearOnComplete ??
+							this.defaultUpdateSettings.clearOnComplete)
+						: this.defaultUpdateSettings.clearOnComplete;
+					const clear = clearOnComplete && nextLines[idx].completed;
+					if (clear) nextLines[idx].text = '';
 					const text = nextLines[idx].text;
 					if (text != null) {
-						const clearOnComplete = (updates[idx] != null)
-							? ((updates[idx]![1] ?? {}).clearOnComplete ??
-								this.defaultUpdateSettings.clearOnComplete)
-							: this.defaultUpdateSettings.clearOnComplete;
-						const clear = clearOnComplete && nextLines[idx].completed;
 						this.#writeLine(clear ? '' : text);
 					}
 					this.priorLines[idx] = nextLines[idx];
@@ -403,7 +417,7 @@ export default class Progress {
 				.replaceAll('{value}', v + '')
 				.replaceAll(/(\s?){label}(\s?)/g, label.length ? ('$1' + label + '$2') : '');
 
-			// compute the available space (non-negative) for a bar
+			// compute the available space (non-negative) for a bar gauge
 			// * note: b/c of the flexible size, only one `{bar}` is supported and only the first is replaced
 			// * `stringWidth()` instead of `.length` to correctly count visual character column width of string, ignoring ANSI escapes
 			// ...eg, `\u{ff0a}` == "full-width asterisk" is otherwise incorrectly counted as a single character column wide
@@ -449,16 +463,20 @@ export default class Progress {
 	 * * no need to call unless you want completion to occur before goal is attained
 	 */
 	complete(): void {
+		if (this.isCompleted) return;
 		this.isCompleted = true;
+		// console.warn({ priorLines: this.priorLines });
 		if (this.renderSettings.clearAllOnComplete) {
+			// console.warn('clearing...');
 			for (let i = 0; i < this.priorLines.length; i++) {
 				this.#cursorToLineStart();
 				this.#writeLine();
 				this.#cursorUp();
 			}
+			this.priorLines.length = 0;
 			this.#cursorToNextLine();
 		}
-		this.#showCursor();
+		// this.#showCursor();
 	}
 
 	/**
@@ -468,20 +486,23 @@ export default class Progress {
 	 */
 	log(message: string): void {
 		if (this.renderSettings.hideCursor) this.#hideCursor();
-		const title = this.renderSettings.title;
-		const titleLines = !Array.isArray(title) ? [title] : title;
 		this.#cursorToBlockStart();
-		this.#cursorUp(titleLines.length);
+		this.#cursorUp(this.titleLines.length);
 		{
-			// minimize text overwrite flashes
-			this.#cursorToNextLine(this.priorLines.length + titleLines.length);
-			this.#cursorUp(this.priorLines.length + titleLines.length);
+			// minimize text overwrite/rewrite flashes
+			this.#cursorToNextLine(this.priorLines.length + this.titleLines.length);
+			this.#cursorUp(this.priorLines.length + this.titleLines.length);
 		}
 
-		this.#writeLine(`${message}`);
-		this.#cursorToNextLine();
-		for (let i = 0; i < titleLines.length; i++) {
-			this.#writeLine(titleLines[i]);
+		// * split message into lines and write to display
+		const msgs = message.replace(/\r\n?|\n$/, '').split(/\r\n?|\n/gms);
+		msgs.forEach((msg) => {
+			this.#writeLine(`${msg}`);
+			this.#cursorToNextLine();
+		});
+
+		for (let i = 0; i < this.titleLines.length; i++) {
+			this.#writeLine(this.titleLines[i]);
 			this.#cursorToNextLine();
 		}
 		for (let i = 0; i < this.priorLines.length; i++) {
@@ -491,7 +512,6 @@ export default class Progress {
 			if (!lastLineToRender) this.#cursorToNextLine();
 			this.#cursorPosition = 'blockEnd';
 		}
-		// if (!this.hideCursor) this.#showCursor();
 	}
 
 	#writeLine(msg?: string): void {
@@ -510,6 +530,7 @@ export default class Progress {
 		if (this.#cursorPosition == 'blockStart') return;
 		this.#cursorToLineStart();
 		if (this.priorLines.length > 0) this.#cursorUp(this.priorLines.length - 1);
+		// if (this.titleLines.length > 0) this.#cursorUp(this.titleLines.length - 1);
 	}
 
 	/** Move cursor to beginning of current line */
