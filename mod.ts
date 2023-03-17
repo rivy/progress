@@ -305,8 +305,9 @@ export default class Progress {
 					const text = nextLines[idx].text;
 					if (text != null) {
 						const clearOnComplete = (updates[idx] != null)
-							? (updates[idx]![1] ?? {}).clearOnComplete ?? false
-							: false;
+							? ((updates[idx]![1] ?? {}).clearOnComplete ??
+								this.defaultUpdateSettings.clearOnComplete)
+							: this.defaultUpdateSettings.clearOnComplete;
 						const clear = clearOnComplete && nextLines[idx].completed;
 						this.#writeLine(clear ? '' : text);
 					}
