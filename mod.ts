@@ -37,6 +37,8 @@ const isWinOS = Deno.build.os === 'windows';
 // ToDO: implement spinners
 // ToDO: implement widgets and/or ES-6 template compatible format strings
 
+// ToDO: handle title and log messages containing multiple lines
+// ToDO: only use first line of any label (discarding any CR/LF and beyond of label string)
 // ToDO: `cursorRest = 'after' | 'start' | 'end' | 'block_start'`, default = after
 // ToDO: ES6-template compatible format strings
 // ref: <>
@@ -64,7 +66,7 @@ const ansiCSI = {
 
 const ttySize = await consoleSize(); // async global b/c `Deno.consoleSize()` lost functionality when stabilized (see GH:denoland/deno#17982)
 
-interface renderConfigOptions {
+export interface RenderConfigOptions {
 	autoCompleteOnAllComplete?: boolean;
 	clearAllOnComplete?: boolean;
 	displayAlways?: boolean;
@@ -75,7 +77,7 @@ interface renderConfigOptions {
 	writer?: Deno.WriterSync & { rid: number };
 }
 
-interface updateOptions {
+export interface UpdateOptions {
 	autoComplete?: boolean;
 	barSymbolComplete?: string;
 	barSymbolIncomplete?: string;
@@ -90,7 +92,7 @@ interface updateOptions {
 	progressTemplate?: string;
 }
 
-type ProgressConstructionOptions = renderConfigOptions & /* default */ updateOptions;
+type ProgressConstructionOptions = RenderConfigOptions & /* default */ UpdateOptions;
 
 // type ProgressUpdateObject = { value: number; options?: updateOptions };
 
@@ -147,8 +149,8 @@ type CursorPosition =
 ;
 // class Progress
 export default class Progress {
-	renderSettings: Required<renderConfigOptions>;
-	defaultUpdateSettings: Required<updateOptions>;
+	renderSettings: Required<RenderConfigOptions>;
+	defaultUpdateSettings: Required<UpdateOptions>;
 
 	private display = true;
 	private isCompleted = false;
@@ -215,7 +217,7 @@ export default class Progress {
 			progressBarWidthMin,
 			progressTemplate,
 		};
-		if (!Array.isArray(title)) title = [title];
+		if (!Array.isArray(title)) title = [title].filter((s) => s != null);
 		this.renderSettings = {
 			autoCompleteOnAllComplete,
 			clearAllOnComplete,
@@ -229,7 +231,10 @@ export default class Progress {
 
 		this.display = this.renderSettings.displayAlways || Deno.isatty(writer.rid);
 
-		for (let i = 0; i < title.length; i++) this.log(title[i]);
+		for (let i = 0; i < title.length; i++) {
+			this.#writeLine(title[i]);
+			this.#cursorToNextLine();
+		}
 
 		// this.#init();
 	}
@@ -266,13 +271,13 @@ export default class Progress {
 	 *   - `symbolIncomplete` - incomplete symbol
 	 *   - `symbolIntermediate` - intermediate symbols
 	 */
-	update(_value_: number, _options_?: (updateOptions & { id?: string })): void;
-	update(_updates_: (number | [number, (updateOptions & { id?: string })?] | null)[]): void;
+	update(_value_: number, _options_?: (UpdateOptions & { id?: string })): void;
+	update(_updates_: (number | [number, (UpdateOptions & { id?: string })?] | null)[]): void;
 	update(
-		updates_: number | (number | [number, (updateOptions & { id?: string })?] | null)[],
-		options_?: (updateOptions & { id?: string }),
+		updates_: number | (number | [number, (UpdateOptions & { id?: string })?] | null)[],
+		options_?: (UpdateOptions & { id?: string }),
 	): void {
-		let updates: ([number, (updateOptions & { id?: string })?] | null)[];
+		let updates: ([number, (UpdateOptions & { id?: string })?] | null)[];
 		if (!Array.isArray(updates_)) {
 			updates = [[updates_, options_]];
 		} else {
@@ -325,7 +330,7 @@ export default class Progress {
 		if (allComplete && this.renderSettings.autoCompleteOnAllComplete) this.complete();
 	}
 
-	#renderLine(v: number, options: updateOptions) {
+	#renderLine(v: number, options: UpdateOptions) {
 		// if ((isNaN(v)) || (v < 0)) {
 		// 	throw new Error(`progress: value must be a number which is greater than or equal to 0`);
 		// }
@@ -338,7 +343,8 @@ export default class Progress {
 		if ((isNaN(v)) || (v < 0)) v = 0;
 		if (v > goal) v = goal;
 
-		const completed = v >= goal;
+		const completed = (options.autoComplete ?? this.defaultUpdateSettings.autoComplete) &&
+			(v >= goal);
 
 		const elapsed = sprintf(
 			'%ss', /* in seconds */
@@ -460,16 +466,24 @@ export default class Progress {
 	 *
 	 * @param message The message to write
 	 */
-	log(message: string | number): void {
+	log(message: string): void {
 		if (this.renderSettings.hideCursor) this.#hideCursor();
+		const title = this.renderSettings.title;
+		const titleLines = !Array.isArray(title) ? [title] : title;
 		this.#cursorToBlockStart();
+		this.#cursorUp(titleLines.length);
 		{
 			// minimize text overwrite flashes
-			this.#cursorToNextLine(this.priorLines.length);
-			this.#cursorUp(this.priorLines.length);
+			this.#cursorToNextLine(this.priorLines.length + titleLines.length);
+			this.#cursorUp(this.priorLines.length + titleLines.length);
 		}
+
 		this.#writeLine(`${message}`);
 		this.#cursorToNextLine();
+		for (let i = 0; i < titleLines.length; i++) {
+			this.#writeLine(titleLines[i]);
+			this.#cursorToNextLine();
+		}
 		for (let i = 0; i < this.priorLines.length; i++) {
 			const line = this.priorLines[i];
 			this.#writeLine(line.text ?? '');
