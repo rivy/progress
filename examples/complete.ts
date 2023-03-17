@@ -1,14 +1,16 @@
 import Progress from '../mod.ts';
 
+const label = 'LABEL';
 const goal = 100;
 
 const progress = new Progress({
+	label,
 	goal,
 	// ==> here
-	symbolComplete: '=',
-	symbolIncomplete: '-',
+	barSymbolComplete: '=',
+	barSymbolIncomplete: '-',
 	// <== here
-	// ToDO: completeTemplate: ':percent :label',
+	completeTemplate: '{percent} {label}',
 });
 
 let completed = 0;

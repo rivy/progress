@@ -1,21 +1,23 @@
-import { /* bgGreen, */ bgWhite, green } from 'https://deno.land/std@0.74.0/fmt/colors.ts';
+import { bgGreen, bgWhite, green } from 'https://deno.land/std@0.74.0/fmt/colors.ts';
 import Progress from '../mod.ts';
 
 const goal = 1000;
 
 const progress = new Progress({
 	goal,
+	// progressBarWidthMax: 100,
 	// Note: on Windows, if UTF-8 is not the default encoding for the terminal, such characters will not be displayed as expected.
 	// ==> here
-	// symbolComplete: bgGreen('*'),
+	barSymbolComplete: bgGreen('*'),
 	barSymbolIntermediate: [
-		bgWhite(green('▏')),
+		// bgWhite(green('▏')),
 		bgWhite(green('▎')),
-		bgWhite(green('▍')),
+		// bgWhite(green('▍')),
 		bgWhite(green('▌')),
-		bgWhite(green('▋')),
+		// bgWhite(green('▋')),
 		bgWhite(green('▊')),
-		bgWhite(green('▉')),
+		// bgWhite(green('▉')),
+		//
 		// bgWhite(green('-')),
 		// bgWhite(green('/')),
 		// bgWhite(green('|')),

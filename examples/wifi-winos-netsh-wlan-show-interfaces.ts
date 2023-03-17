@@ -27,7 +27,7 @@ export const decode = (input?: Uint8Array): string => decoder.decode(input);
 // export const encode = (input?: string): Uint8Array => encoder.encode(input);
 
 // import Progress from 'https://cdn.jsdelivr.net/gh/rivy/progress@1d0758f6f7/mod.ts';
-import Progress from './../mod.ts';
+import { default as Progress, UpdateOptions } from './../mod.ts';
 
 //===
 
@@ -104,6 +104,17 @@ function isTTY(rid: number) {
 	}
 }
 
+function logAsInfo(s: string) {
+	const msg = $colors.cyan(`info: ${s}`);
+	// console.warn(msg);
+	progress.log(msg);
+}
+function logAsWarn(s: string) {
+	const msg = $colors.magenta(`WARN: ${s}`);
+	// console.warn(msg);
+	progress.log(msg);
+}
+
 // restore cursor display on console (regardless of process exit path)
 const ansiCSI = { showCursor: '\x1b[?25h', hideCursor: '\x1b[?25l', clearEOL: '\x1b[0K' };
 
@@ -112,14 +123,17 @@ const ansiCSI = { showCursor: '\x1b[?25h', hideCursor: '\x1b[?25l', clearEOL: '\
 // start keypress/input consumer (avoid post-process residual keyboard input)
 keypress().addEventListener('keydown', (event: KeyPressEvent) => {
 	// console.log('# event');
-	if (event.key === 'q') {
-		console.warn(`'${event.key.toLocaleUpperCase()}' pressed; requesting exit`);
+	// if ((event.key === 'q') || (event.key === 'escape')) {
+	if ((event.key != null) && (['escape', 'q'].includes(event.key))) {
+		let key = event.key.toLocaleUpperCase();
+		key = key.length > 1 ? key : `'${key}'`;
+		logAsInfo(`${key} pressed; requesting exit`);
 		// Stop event loop and iterator.
 		// keypress().dispose();
 		exit_requested = true;
 	}
 	if (event.ctrlKey && event.key === 'c') {
-		console.warn(`CTRL-${event.key.toLocaleUpperCase()} pressed; requesting exit`);
+		logAsInfo(`CTRL-${event.key.toLocaleUpperCase()} pressed; requesting exit`);
 		// Stop event loop and iterator.
 		// keypress().dispose();
 		exit_requested = true;
@@ -135,9 +149,10 @@ try {
 		? ['SIGBREAK'] as Deno.Signal[]
 		: []);
 	// .concat(['SIGINT']); // CTRL-C (handled by keyboard input consumer)
+	// console.warn({ s });
 	s.forEach((signalType) =>
 		Deno.addSignalListener(signalType, () => {
-			console.warn(`${signalType} caught; requesting exit`);
+			logAsInfo(`${signalType} caught; requesting exit`);
 			exit_requested = true;
 		})
 	);
@@ -270,7 +285,7 @@ const progress = new Progress({
 	title: 'WiFi Signals',
 	// completeTemplate: 'done',
 	autoComplete: false,
-	// displayAlways: true, // unneeded iff `read` permission is used for `writer` (currently, 'CONOUT$')
+	// displayAlways: true, // unneeded if console `writer` (eg, 'CONOUT$') has `read` permission
 	hideCursor: true,
 	writer,
 });
@@ -294,52 +309,84 @@ const fetchFn = async function (myID = fetchIntervalID) {
 	index = (index < Number.MAX_SAFE_INTEGER) ? index + 1 : index;
 	if (index > nReadings) exit_requested = true;
 	// console.warn({ index, exit_requested });
-	const { signalQuality, wifiInterfaceData } = exit_requested
-		? { signalQuality: NaN, wifiInterfaceData: undefined }
+	const signalData = exit_requested
+		? [{ signalQuality: NaN, interfaceData: new Map<string, string>() }]
 		: await (async () => {
 			const output = await netshWlanShowInterfaces();
-			const wifiInterfaceData = netshOutputToMaps(output)
-				?.filter((e) => e.has('Name') && e.has('BSSID'))
-				.map((e) => e.set('@', new Date().toISOString()));
+			const now = new Date().toISOString();
+			const wifiInterfacesData = netshOutputToMaps(output)
+				// ?.filter((e) => e.has('Name') && e.has('BSSID'))
+				?.filter((e) => e.has('Name'))
+				.map((e) => e.set('@', now)) ?? [];
 			// console.warn({ wifiInterfaceData });
 			// wifiInterfaceData?.forEach((e) => arrayForWhat.push(e));
-			const signalQuality = Number(wifiInterfaceData?.[0]?.get('Signal')?.match(/\d+/));
-			return { signalQuality, wifiInterfaceData };
+			// const signalQuality = Number(wifiInterfaceData[0]?.get('Signal')?.match(/\d+/));
+			// return { signalQuality, wifiInterfaceData };
+			return wifiInterfacesData.map((e) => {
+				return { signalQuality: Number(e.get('Signal')?.match(/\d+/)), interfaceData: e };
+			});
 		})();
-	if (!exit_requested && Number.isNaN(signalQuality)) {
+	const failedSignalRead = signalData.every((e) => Number.isNaN(e.signalQuality));
+	if (!exit_requested && failedSignalRead) {
 		totalFailures += 1;
 		if (myID == fetchIntervalID) {
 			sequentialFailures += 1;
-			progress.log(
-				`WARN: fetch failure (myID=${myID}; sequential=${sequentialFailures}; total=${totalFailures}; fetchDelay=${fetchDelay})`,
+			logAsWarn(
+				`fetch failure (myID=${myID}; sequential=${sequentialFailures}; total=${totalFailures}; fetchDelay=${fetchDelay})`,
 			);
 			clearInterval(fetchIntervalID);
 			fetchDelay += 1;
 			fetchIntervalID = setInterval(fetchFn, fetchDelay);
 			if (sequentialFailures > maxSequentialFailures) exit_requested = true;
 		} else {
-			progress.log(
-				`WARN: fetch failure, unmatched ID (myID=${myID}; intervalID=${fetchIntervalID})`,
-			);
+			logAsWarn(`fetch failure, unmatched ID (myID=${myID}; intervalID=${fetchIntervalID})`);
 		}
 	} else sequentialFailures = 0;
-	if (!exit_requested && !Number.isNaN(signalQuality)) {
-		const dBm = dBmFromQuality(signalQuality);
-		const qualityLevel = qualityLevelInfo(dBm);
-		// console.warn({ signalQuality, dBm, qualityLevel });
-		const prefix = `${wifiInterfaceData?.[0]?.get('@')} :: ${
-			// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ::\x1b[m*:: ${
-			// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ::😀\u{fe0e}:: ${
-			// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ::😀\u{fe0e}:: ${
-			// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ${$colors.green('::')}\u{ff0a}:: ${
-			wifiInterfaceData?.[0]?.get('Name') ?? 'unknown'
-		} @ ${dBm.toFixed(1)} dBm`;
-		// const suffix = `${wifiInterfaceData?.[0]?.get('Name')}`;
-		progress.update(signalQuality, {
-			barSymbolComplete: qualityLevel.signal,
-			barSymbolIncomplete: qualityLevel.background,
-			progressTemplate: `${prefix} * {percent} * {bar} *`,
-		});
+	if (!exit_requested && !failedSignalRead) {
+		// const signalQuality = signalData[0].signalQuality;
+		// const dBm = dBmFromQuality(signalQuality);
+		// const qualityLevel = qualityLevelInfo(dBm);
+		// // console.warn({ signalQuality, dBm, qualityLevel });
+		// const prefix = `${signalData[0]?.interfaceData?.get('@')} :: ${
+		// 	// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ::\x1b[m*:: ${
+		// 	// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ::😀\u{fe0e}:: ${
+		// 	// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ::😀\u{fe0e}:: ${
+		// 	// const prefix = `${wifiInterfaceData?.[0]?.get('@')} ${$colors.green('::')}\u{ff0a}:: ${
+		// 	signalData[0]?.interfaceData?.get('Name') ?? 'unknown'
+		// } @ ${dBm.toFixed(1)} dBm`;
+		// // const suffix = `${wifiInterfaceData?.[0]?.get('Name')}`;
+		// progress.update(signalQuality, {
+		// 	barSymbolComplete: qualityLevel.signal,
+		// 	barSymbolIncomplete: qualityLevel.background,
+		// 	progressTemplate: `${prefix} * {percent} * {bar} *`,
+		// });
+		const nameLengthMax = signalData.reduce((max, e) => {
+			const len = (e.interfaceData.get('Name') ?? '<unknown>').length;
+			return (max > len) ? max : len;
+		}, 0);
+		const progressLines = signalData
+			.map((e) => {
+				const signalQuality = e.signalQuality;
+				const dBm = dBmFromQuality(signalQuality);
+				const qualityLevel = qualityLevelInfo(dBm);
+				// console.warn({ signalQuality, dBm, qualityLevel });
+				const prefix = `${e.interfaceData?.get('@')} :: ${
+					// const prefix = `${e.interfaceData?.[0]?.get('@')} ::\x1b[m*:: ${
+					// const prefix = `${e.interfaceData?.[0]?.get('@')} ::😀\u{fe0e}:: ${
+					// const prefix = `${e.interfaceData?.[0]?.get('@')} ::😀\u{fe0e}:: ${
+					// const prefix = `${e.interfaceData?.[0]?.get('@')} ${$colors.green('::')}\u{ff0a}:: ${
+					(e.interfaceData?.get('Name') ?? '<unknown>').padEnd(nameLengthMax)
+				} @ ${dBm.toFixed(1).padStart(5)} dBm`;
+				return [signalQuality, {
+					barSymbolComplete: qualityLevel.signal,
+					barSymbolIncomplete: qualityLevel.background,
+					progressTemplate: `${prefix} * {percent} * {bar} *`,
+				}] as [number, UpdateOptions];
+			})
+			.sort((a, b) => {
+				return ((a[1].progressTemplate) ?? '').localeCompare(b[1].progressTemplate ?? '');
+			});
+		progress.update(progressLines);
 	}
 	if (exit_requested) {
 		progress.complete();

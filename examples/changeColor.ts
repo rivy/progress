@@ -7,17 +7,25 @@ const progress = new Progress({
 	goal,
 	barSymbolComplete: red('='),
 	barSymbolIncomplete: yellow('-'),
+	clearOnComplete: true,
 });
 
 let completed = 0;
 
 function run() {
 	if (completed <= goal) {
-		if (completed >= 20) {
+		if (completed >= 50) {
 			progress.update(completed++, {
 				// ==> here
 				barSymbolComplete: green('='),
 				barSymbolIncomplete: '-',
+				// <== here
+			});
+		} else if (completed >= 25) {
+			progress.update(completed++, {
+				// ==> here
+				barSymbolComplete: green('='),
+				// barSymbolIncomplete: '-',
 				// <== here
 			});
 		} else {
