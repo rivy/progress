@@ -26,12 +26,14 @@ import { consoleSize } from './src/lib/consoleSize.ts';
 // ToDO: implement STDIN discarding (see https://www.npmjs.com/package/stdin-discarder; use `Deno.stdin.setRaw()`, ...)
 //   ... * note: `Deno.stdin.setRaw(false)` will need Deno version >= v1.31.2 for correct restoration of STDIN input handling (see GH:denoland/deno#17866 with fix GH:denoland/deno#17983)
 
+// FixME: investigate relationship between update interval calls and minRenderInterval ; some updates can result in `completed` with a value slightly less than `goal`
+//    ... *early-complete-bug-example.ts* can show this
+
 //===
 
 const isWinOS = Deno.build.os === 'windows';
 
 const LF = '\n';
-const EOLReS = '\r?\n|\r';
 
 // spell-checker:ignore (WinOS) CONOUT
 
@@ -73,6 +75,8 @@ export interface RenderConfigOptions {
 	autoCompleteOnAllComplete?: boolean;
 	clearAllOnComplete?: boolean;
 	displayAlways?: boolean;
+	dynamicCompleteHeight?: boolean;
+	dynamicUpdateHeight?: boolean;
 	hideCursor?: boolean;
 	minRenderInterval?: number;
 	title?: string | string[]; // ToDO: string | string[]
@@ -127,6 +131,15 @@ function isTTY(rid: number) {
 	}
 }
 
+const EOLReS = '\r?\n|\r';
+const EOLRx = new RegExp(`${EOLReS}`, 'ms');
+const terminalEOLRx = new RegExp(`(${EOLReS})$`, 'ms');
+function splitIntoLines(s: string) {
+	// all returned "lines" are non-empty or were terminated with a trailing EOL
+	// * remove any terminal EOL to avoid a last phantom line
+	return s.replace(terminalEOLRx, '').split(EOLRx);
+}
+
 const consoleOutputFile = isWinOS ? 'CONOUT$' : '/dev/tty';
 
 ['unload'].forEach((eventType) =>
@@ -158,7 +171,12 @@ export default class Progress {
 	private display = true;
 	private isCompleted = false;
 	private startTime = Date.now();
-	private priorLines: { id: number | string; text: string | null; completed: boolean }[] = [];
+	private priorLines: {
+		id: number | string;
+		text: string | null;
+		completed: boolean;
+		options: UpdateOptions;
+	}[] = [];
 	private priorUpdateTime = 0;
 	// private renderFrame = 0; // for spinners
 	private titleLines: string[];
@@ -201,6 +219,8 @@ export default class Progress {
 		autoCompleteOnAllComplete = true,
 		clearAllOnComplete = false,
 		displayAlways = false,
+		dynamicCompleteHeight = false,
+		dynamicUpdateHeight = false,
 		hideCursor = false,
 		minRenderInterval = 20, // ms
 		title = [],
@@ -225,6 +245,8 @@ export default class Progress {
 			autoCompleteOnAllComplete,
 			clearAllOnComplete,
 			displayAlways,
+			dynamicCompleteHeight,
+			dynamicUpdateHeight,
 			hideCursor,
 			ttyColumns,
 			minRenderInterval,
@@ -236,11 +258,7 @@ export default class Progress {
 
 		this.titleLines = (Array.isArray(title) ? title : [title]).filter((s) => s != null);
 		// * split all supplied text into lines
-		this.titleLines = (this.titleLines.length <= 0)
-			? []
-			: this.titleLines.join(LF).replace(new RegExp(`${EOLReS}\$`), '').split(
-				new RegExp(`${EOLReS}`, 'gms'),
-			);
+		this.titleLines = (this.titleLines.length <= 0) ? [] : splitIntoLines(this.titleLines.join(LF));
 
 		for (let i = 0; i < this.titleLines.length; i++) {
 			this.#writeLine(this.titleLines[i]);
@@ -302,45 +320,65 @@ export default class Progress {
 		if (msUpdateInterval < this.renderSettings.minRenderInterval) return;
 		this.priorUpdateTime = now;
 
-		const nextLines: typeof this.priorLines = [];
+		const updatedLines: (typeof this.priorLines[number] | null)[] = [];
 
-		let allComplete = true;
-		for (let idx = 0; idx < updates.length; idx++) {
-			if (updates[idx] != null) {
+		// let allUpdatedAreComplete = true;
+		const linesForUpdate = Math.max(updates.length, this.priorLines.length);
+		for (let idx = 0; idx < linesForUpdate; idx++) {
+			if (updates[idx] == null) {
+				updatedLines[idx] = null;
+			} else {
 				const value = updates[idx]![0];
-				const options = updates[idx]![1] ?? {};
+				const options = { ...(this.priorLines[idx]?.options ?? {}), ...updates[idx]![1] };
 				const id = options.id ?? idx;
 				const { updateText, completed } = this.priorLines[idx]?.completed
 					? { updateText: this.priorLines[idx].text, completed: this.priorLines[idx].completed }
 					: this.#renderLine(value, options);
-				nextLines[idx] = { id, text: updateText, completed };
-				allComplete &&= completed;
-			} else allComplete &&= true;
+				const clearOnComplete = options.clearOnComplete ??
+					this.defaultUpdateSettings.clearOnComplete;
+				const clear = clearOnComplete && completed;
+				updatedLines[idx] = { id, text: clear ? null : updateText, completed, options };
+				// allUpdatedAreComplete &&= completed;
+			}
 		}
 
 		{ // update display // ToDO: revise as method
-			this.#cursorToBlockStart();
-			// this.#cursorToNextLine(this.titleLines.length - 1);
-			for (let idx = 0; idx < updates.length; idx++) {
-				if (nextLines[idx] !== this.priorLines[idx]) {
-					const clearOnComplete = (updates[idx] != null)
-						? ((updates[idx]![1] ?? {}).clearOnComplete ??
-							this.defaultUpdateSettings.clearOnComplete)
-						: this.defaultUpdateSettings.clearOnComplete;
-					const clear = clearOnComplete && nextLines[idx].completed;
-					if (clear) nextLines[idx].text = '';
-					const text = nextLines[idx].text;
-					if (text != null) {
-						this.#writeLine(clear ? '' : text);
-					}
-					this.priorLines[idx] = nextLines[idx];
+			const nextLines: typeof this.priorLines = [];
+			const dynamicHeight = this.renderSettings.dynamicUpdateHeight;
+			const priorDisplayHeight = this.priorLines.length;
+			// * calculate next display frame
+			let displayLineIndex = 0;
+			for (let idx = 0; idx < updatedLines.length; idx++) {
+				const line = updatedLines[idx] ?? this.priorLines[idx];
+				if (!dynamicHeight || (line.text != null)) {
+					nextLines[displayLineIndex++] = line;
 				}
-				const lastLineToRender = (idx == (updates.length - 1));
-				if (!lastLineToRender) this.#cursorToNextLine();
 			}
+			// * show new display frame
+			this.#cursorToBlockStart();
+			const lastLineToRender = nextLines.length - 1;
+			for (let idx = 0; idx < nextLines.length; idx++) {
+				this.#writeLine(nextLines[idx]?.text ?? '');
+				if (idx != lastLineToRender) this.#cursorToNextLine();
+			}
+			const linesToClear = ((priorDisplayHeight - nextLines.length) > 0)
+				? (priorDisplayHeight - nextLines.length)
+				: 0;
+			for (let i = 0; i < linesToClear; i++) {
+				this.#cursorToNextLine();
+				this.#writeLine('');
+			}
+			this.#cursorUp(linesToClear);
+			this.#cursorToNextLine(this.titleLines.length - 1);
+			this.priorLines = nextLines;
 			this.#cursorPosition = 'blockEnd';
 		}
 
+		// if (allUpdatedAreComplete && this.renderSettings.autoCompleteOnAllComplete) this.complete();
+		const allComplete = this.priorLines.reduce(
+			(allCompleteSoFar, line) => allCompleteSoFar && line.completed,
+			true,
+		);
 		if (allComplete && this.renderSettings.autoCompleteOnAllComplete) this.complete();
 	}
 
@@ -465,18 +503,47 @@ export default class Progress {
 	complete(): void {
 		if (this.isCompleted) return;
 		this.isCompleted = true;
+		const dynamicHeight = this.renderSettings.dynamicCompleteHeight;
 		// console.warn({ priorLines: this.priorLines });
+		const finalLines: (typeof this.priorLines) = [];
 		if (this.renderSettings.clearAllOnComplete) {
 			// console.warn('clearing...');
-			for (let i = 0; i < this.priorLines.length; i++) {
+			for (let i = this.priorLines.length; i > 0; i--) {
 				this.#cursorToLineStart();
 				this.#writeLine();
 				this.#cursorUp();
 			}
-			this.priorLines.length = 0;
+			this.priorLines = finalLines;
 			this.#cursorToNextLine();
+		} else if (dynamicHeight) {
+			let linesToClear = 0;
+			let finalLinesIndex = 0;
+			for (let i = 0; i < this.priorLines.length; i++) {
+				const text = this.priorLines[i]?.text ?? '';
+				if (text.length <= 0) linesToClear += 1;
+				else finalLines[finalLinesIndex++] = this.priorLines[i];
+			}
+			// console.warn({ priorLines: this.priorLines, linesToClear, finalLines });
+			for (let i = 0; i < linesToClear; i++) {
+				this.#cursorToLineStart();
+				this.#writeLine();
+				this.#cursorUp();
+			}
+			this.priorLines = finalLines;
+			// console.warn({ priorLines: this.priorLines, linesToClear, finalLines });
+			this.#cursorToBlockStart();
+			const lastLineToRender = this.priorLines.length - 1;
+			for (let i = 0; i < this.priorLines.length; i++) {
+				const text = this.priorLines[i].text ?? '';
+				if (text.length > 0) {
+					this.#writeLine(text);
+					if (i < lastLineToRender) this.#cursorToNextLine();
+				}
+			}
 		}
-		// this.#showCursor();
+		// this.#writeLine();
+		// this.#cursorUp();
+		this.#showCursor();
 	}
 
 	/**
@@ -485,6 +552,7 @@ export default class Progress {
 	 * @param message The message to write
 	 */
 	log(message: string): void {
+		if (this.isCompleted) return;
 		if (this.renderSettings.hideCursor) this.#hideCursor();
 		this.#cursorToBlockStart();
 		this.#cursorUp(this.titleLines.length);
@@ -495,7 +563,7 @@ export default class Progress {
 		}
 
 		// * split message into lines and write to display
-		const msgs = message.replace(/\r\n?|\n$/, '').split(/\r\n?|\n/gms);
+		const msgs = splitIntoLines(message);
 		msgs.forEach((msg) => {
 			this.#writeLine(`${msg}`);
 			this.#cursorToNextLine();
@@ -507,7 +575,7 @@ export default class Progress {
 		}
 		for (let i = 0; i < this.priorLines.length; i++) {
 			const line = this.priorLines[i];
-			this.#writeLine(line.text ?? '');
+			this.#writeLine(line?.text ?? '');
 			const lastLineToRender = (i == (this.priorLines.length - 1));
 			if (!lastLineToRender) this.#cursorToNextLine();
 			this.#cursorPosition = 'blockEnd';
