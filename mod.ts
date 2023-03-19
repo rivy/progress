@@ -89,6 +89,7 @@ export interface UpdateOptions {
 	barSymbolComplete?: string;
 	barSymbolIncomplete?: string;
 	barSymbolIntermediate?: string[];
+	barSymbolLeader?: string;
 	clearOnComplete?: boolean;
 	completeTemplate?: string | null;
 	goal?: number;
@@ -175,7 +176,7 @@ export default class Progress {
 		id: number | string;
 		text: string | null;
 		completed: boolean;
-		options: UpdateOptions;
+		options: Required<UpdateOptions>;
 	}[] = [];
 	private priorUpdateTime = 0;
 	// private renderFrame = 0; // for spinners
@@ -192,6 +193,7 @@ export default class Progress {
 	 * @param barSymbolComplete  completion symbol, default: colors.bgGreen(' ')
 	 * @param barSymbolIncomplete  incomplete symbol, default: colors.bgWhite(' ')
 	 * @param barSymbolIntermediate  incomplete symbol, default: colors.bgWhite(' ')
+	 * @param barSymbolLeader  bar leader symbol, default: ''
 	 * @param completeTemplate  progress display line content for completion, default: undefined
 	 * @param progressBarWidthMax  the maximum displayed width of the progress bar, default: 50 characters
 	 * @param progressBarWidthMin  the minimum displayed width of the progress bar, default: 10 characters
@@ -208,6 +210,7 @@ export default class Progress {
 		barSymbolComplete = bgGreen(' '),
 		barSymbolIncomplete = bgWhite(' '),
 		barSymbolIntermediate = [],
+		barSymbolLeader = '',
 		clearOnComplete = false,
 		completeTemplate = null,
 		goal = 100,
@@ -215,7 +218,7 @@ export default class Progress {
 		label = '',
 		progressBarWidthMax = 50, // characters
 		progressBarWidthMin = 10, // characters
-		progressTemplate = '{label} {percent} {bar} {elapsed} {value}/{goal}',
+		progressTemplate = '{label} {percent} {bar} ({elapsed}) {value}/{goal}',
 		autoCompleteOnAllComplete = true,
 		clearAllOnComplete = false,
 		displayAlways = false,
@@ -230,8 +233,9 @@ export default class Progress {
 		this.defaultUpdateSettings = {
 			autoComplete,
 			barSymbolComplete,
-			barSymbolIntermediate: barSymbolIntermediate.concat(barSymbolComplete),
+			barSymbolIntermediate, /* : barSymbolIntermediate.concat(barSymbolComplete) */
 			barSymbolIncomplete,
+			barSymbolLeader,
 			clearOnComplete,
 			completeTemplate,
 			goal,
@@ -307,13 +311,20 @@ export default class Progress {
 		options_?: (UpdateOptions & { id?: string }),
 	): void {
 		if (this.isCompleted || !this.display) return;
-		let updates: ([number, (UpdateOptions & { id?: string })?] | null)[];
+		let updates: ([number, (Required<UpdateOptions> & { id?: string })] | null)[];
+		const defaultOptions = this.defaultUpdateSettings;
 		if (!Array.isArray(updates_)) {
-			updates = [[updates_, options_]];
+			updates = [[updates_, { ...defaultOptions, ...(this.priorLines[0]?.options), ...options_ }]];
 		} else {
-			updates = updates_.map((e) => (e != null) ? (Array.isArray(e) ? e : [e, {}]) : null);
+			updates = updates_.map((e, idx) =>
+				(e != null)
+					? (Array.isArray(e)
+						? [e[0], { ...defaultOptions, ...(this.priorLines[idx]?.options), ...e[1] }]
+						: [e, { ...defaultOptions, ...(this.priorLines[0]?.options) }])
+					: null
+			);
 		}
-		// console.warn({ values });
+		// console.warn({ updates });
 
 		const now = Date.now();
 		const msUpdateInterval = now - this.priorUpdateTime;
@@ -322,25 +333,24 @@ export default class Progress {
 
 		const updatedLines: (typeof this.priorLines[number] | null)[] = [];
 
-		// let allUpdatedAreComplete = true;
 		const linesForUpdate = Math.max(updates.length, this.priorLines.length);
 		for (let idx = 0; idx < linesForUpdate; idx++) {
 			if (updates[idx] == null) {
 				updatedLines[idx] = null;
 			} else {
 				const value = updates[idx]![0];
-				const options = { ...(this.priorLines[idx]?.options ?? {}), ...updates[idx]![1] };
+				// const options = { ...(this.priorLines[idx]?.options), ...updates[idx]![1] };
+				const options = updates[idx]![1];
 				const id = options.id ?? idx;
 				const { updateText, completed } = this.priorLines[idx]?.completed
 					? { updateText: this.priorLines[idx].text, completed: this.priorLines[idx].completed }
 					: this.#renderLine(value, options);
-				const clearOnComplete = options.clearOnComplete ??
-					this.defaultUpdateSettings.clearOnComplete;
-				const clear = clearOnComplete && completed;
+				const clear = options.clearOnComplete && completed;
+				// console.warn({ updateText, clear });
 				updatedLines[idx] = { id, text: clear ? null : updateText, completed, options };
-				// allUpdatedAreComplete &&= completed;
 			}
 		}
+		// console.warn({ updatedLines });
 
 		{ // update display // ToDO: revise as method
 			const nextLines: typeof this.priorLines = [];
@@ -382,21 +392,21 @@ export default class Progress {
 		if (allComplete && this.renderSettings.autoCompleteOnAllComplete) this.complete();
 	}
 
-	#renderLine(v: number, options: UpdateOptions) {
+	#renderLine(v: number, options: Required<UpdateOptions>) {
 		// if ((isNaN(v)) || (v < 0)) {
 		// 	throw new Error(`progress: value must be a number which is greater than or equal to 0`);
 		// }
+		// console.warn({ options });
 
 		const now = Date.now();
 		const age = now - this.startTime; // (in ms)
 
-		const goal = options.goal ?? this.defaultUpdateSettings.goal;
+		const goal = options.goal;
 
 		if ((isNaN(v)) || (v < 0)) v = 0;
 		if (v > goal) v = goal;
 
-		const completed = (options.autoComplete ?? this.defaultUpdateSettings.autoComplete) &&
-			(v >= goal);
+		const completed = options.autoComplete && (v >= goal);
 
 		const elapsed = sprintf(
 			'%ss', /* in seconds */
@@ -439,11 +449,8 @@ export default class Progress {
 		);
 
 		// {elapsed} {eta} {goal} {percent} {rate} {value} {label} {bar}
-		const label = options.label ?? this.defaultUpdateSettings.label;
-		const template =
-			(completed
-				? (options.completeTemplate ?? this.defaultUpdateSettings.completeTemplate)
-				: undefined) ?? options.progressTemplate ?? this.defaultUpdateSettings.progressTemplate;
+		const label = options.label;
+		const template = (completed ? options.completeTemplate : undefined) ?? options.progressTemplate;
 		let updateText = null;
 		if (template != null) {
 			updateText = template
@@ -466,31 +473,39 @@ export default class Progress {
 			);
 			if ((availableSpace > 0) && isWinOS) availableSpace -= 1;
 
-			const width = Math.min(this.defaultUpdateSettings.progressBarWidthMax, availableSpace);
+			const width = Math.min(options.progressBarWidthMax, availableSpace);
 
-			const preciseBar = options.barSymbolIntermediate ??
-				this.defaultUpdateSettings.barSymbolIntermediate;
-			const precision = preciseBar.length > 1;
+			const partialSubGauge = options.barSymbolIntermediate;
+			const isPrecise = partialSubGauge.length > 1;
 
 			// ToDO: deal correctly with unicode character variable widths
 			// :bar
-			const completeLength = width * v / goal;
-			const roundedCompleteLength = Math.floor(completeLength);
+			const completeWidth = width * v / goal;
+			const wholeCompleteWidth = Math.floor(completeWidth);
 
-			let precise = '';
-			if (precision) {
-				const preciseLength = completeLength - roundedCompleteLength;
-				precise = completed ? '' : preciseBar[Math.floor(preciseBar.length * preciseLength)];
+			let intermediary = '';
+			if (isPrecise) {
+				const partialLength = completeWidth - wholeCompleteWidth;
+				intermediary = completed
+					? ''
+					: partialSubGauge[Math.floor(partialSubGauge.length * partialLength)];
 			}
+			const leader = completed ? '' : options.barSymbolLeader;
 
-			const complete = new Array(roundedCompleteLength)
-				.fill(options.barSymbolComplete ?? this.defaultUpdateSettings.barSymbolComplete)
-				.join('');
-			const incomplete = new Array(Math.max(width - roundedCompleteLength - (precision ? 1 : 0), 0))
-				.fill(options.barSymbolIncomplete ?? this.defaultUpdateSettings.barSymbolIncomplete)
-				.join('');
+			const incompleteWidth = width - wholeCompleteWidth - stringWidth(intermediary) -
+				stringWidth(leader);
 
-			updateText = updateText.replace('{bar}', complete + precise + incomplete);
+			// console.warn({ width, completeWidth, wholeCompleteWidth, incompleteWidth });
+
+			// ToDO: enforce symbols as single graphemes (ignoring ANSI escapes)
+			const complete = new Array(wholeCompleteWidth).fill(options.barSymbolComplete).join('');
+			const incomplete = new Array(Math.max(incompleteWidth, 0))
+				.fill(options.barSymbolIncomplete)
+				.join('');
+			// const leader = hasLeader ? [...]
+			// console.warn({ complete, intermediary, leader, incomplete });
+
+			updateText = updateText.replace('{bar}', complete + intermediary + leader + incomplete);
 		}
 
 		return { updateText, completed };
@@ -552,7 +567,7 @@ export default class Progress {
 	 * @param message The message to write
 	 */
 	log(message: string): void {
-		if (this.isCompleted) return;
+		// if (this.isCompleted) return;
 		if (this.renderSettings.hideCursor) this.#hideCursor();
 		this.#cursorToBlockStart();
 		this.#cursorUp(this.titleLines.length);
@@ -580,6 +595,7 @@ export default class Progress {
 			if (!lastLineToRender) this.#cursorToNextLine();
 			this.#cursorPosition = 'blockEnd';
 		}
+		if (this.isCompleted) this.#showCursor();
 	}
 
 	#writeLine(msg?: string): void {
