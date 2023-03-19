@@ -5,10 +5,11 @@ const goal = 1000;
 
 const progress = new Progress({
 	goal,
+	minRenderInterval: 10,
 	// progressBarWidthMax: 100,
 	// Note: on Windows, if UTF-8 is not the default encoding for the terminal, such characters will not be displayed as expected.
 	// ==> here
-	barSymbolComplete: bgGreen('*'),
+	// barSymbolComplete: bgGreen('*'),
 	barSymbolIntermediate: [
 		// bgWhite(green('▏')),
 		bgWhite(green('▎')),
@@ -26,6 +27,7 @@ const progress = new Progress({
 		// bgWhite(green('/')),
 		// bgWhite(green('|')),
 		// bgWhite(green('\\')),
+		// bgGreen('*'),
 	],
 	// <== here
 });

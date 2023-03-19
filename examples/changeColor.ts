@@ -7,7 +7,7 @@ const progress = new Progress({
 	goal,
 	barSymbolComplete: red('='),
 	barSymbolIncomplete: yellow('-'),
-	clearOnComplete: true,
+	// clearOnComplete: true,
 });
 
 let completed = 0;

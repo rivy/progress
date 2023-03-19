@@ -1,19 +1,21 @@
 import Progress from '../mod.ts';
 
-const title = 'Download files...';
+const title = 'Downloading files...';
 const total = 100;
 
 const bars = new Progress({
 	// autoCompleteOnAllComplete: false,
-	clearAllOnComplete: true,
-	title,
+	// clearAllOnComplete: true,
+	// title,
 	// clearOnComplete: true,
+	dynamicCompleteHeight: true,
+	// dynamicUpdateHeight: true,
 	barSymbolComplete: '=',
 	barSymbolIncomplete: '-',
 	// progressBarWidthMax: 100,
-	// completeTemplate: 'DONE: {label}',
-	progressTemplate: '[{bar}] {label} {percent} {elapsed} {value}/{goal}',
-	// hideCursor: true,
+	completeTemplate: '',
+	progressTemplate: '[{bar}] {label} {percent} (in {elapsed}) {value}/{goal}',
+	hideCursor: true,
 });
 
 let completed1 = 0;
@@ -30,9 +32,15 @@ function downloading() {
 		completed2 += 3;
 		completed3 += 2;
 		bars.update([
+			[0, {
+				goal: 1,
+				progressTemplate: title,
+				completeTemplate: title + 'DONE',
+				clearOnComplete: false,
+			}],
 			[completed1, { label: 'file1', barSymbolComplete: '*', barSymbolIncomplete: '.' }],
 			[completed2, { label: 'file2', clearOnComplete: true }],
-			[completed3, { label: 'file3', completeTemplate: 'DONE: {label}' }],
+			[completed3, { label: 'file3' /* completeTemplate: '*DONE*: {label}' */ }],
 		]);
 		if ((completed3 <= total) && (completed3 % 50 == 0)) {
 			bars.log(`file3: completed ${completed3} of ${total}`);
@@ -53,7 +61,7 @@ function downloading() {
 		setTimeout(function () {
 			downloading();
 		}, 50);
-	}
+	} else bars.update(1);
 }
 
 downloading();

@@ -1,6 +1,10 @@
 import Progress from '../mod.ts';
 
-const progress = new Progress({ label: 'backward', goal: 100 });
+const progress = new Progress({
+	label: 'backward',
+	goal: 100,
+	// progressTemplate: '{percent} * {value}/{goal} ({elapsed})',
+});
 
 let completed = 0;
 

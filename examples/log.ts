@@ -5,6 +5,8 @@
 // 	maximumFractionDigits: 0,
 // });
 
+import * as $colors from 'https://deno.land/std@0.126.0/fmt/colors.ts';
+
 import Progress from '../mod.ts';
 
 const label = 'progress =';
@@ -22,12 +24,13 @@ let completed = 0;
 
 function downloading() {
 	if (completed <= goal) {
-		progress.update([++completed, [completed, { label: 'progress *' }]]);
+		progress.update([completed, [completed, { label: 'progress *' }]]);
 		// here ==>
 		if (completed % 20 === 0) {
 			// progress.log(`${sprintf('%3s%% complete', asInteger.format(completed))}`);
-			progress.log(`${completed.toString().padStart(3, ' ')}% complete`);
+			progress.log($colors.cyan(`info: ${completed.toString().padStart(3, ' ')}% complete`));
 		}
+		completed += 1;
 		// <== here
 
 		setTimeout(function () {

@@ -8,7 +8,7 @@ const progress = new Progress({
 	goal,
 	// here ==>
 	// width: 20
-	progressBarWidth: 1000, // longer than the terminal width
+	progressBarWidthMax: 1000, // longer than the terminal width
 	// <== here
 });
 
