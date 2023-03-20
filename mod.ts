@@ -484,7 +484,6 @@ export default class Progress {
 				0,
 				this.renderSettings.ttyColumns - stringWidth(updateText.replace('{bar}', '')) - 1,
 			);
-			// if ((availableSpace > 0) && isWinOS) availableSpace -= 1;
 
 			const width = Math.max(
 				Math.min(options.progressBarWidthMax, availableSpace),
@@ -518,14 +517,10 @@ export default class Progress {
 			const incomplete = new Array(Math.max(incompleteWidth, 0))
 				.fill(options.barSymbolIncomplete)
 				.join('');
-			// const leader = hasLeader ? [...]
-			// console.warn({ complete, intermediary, leader, incomplete });
 
 			updateText = updateText.replace('{bar}', complete + intermediary + leader + incomplete);
 
-			// ToDO: handle lines > maxWidth; requires string calculation and manipulation which can handle dual-width unicode characters and ignore ANSI escapes
 			updateText = cliTruncate(updateText, this.renderSettings.ttyColumns - 1);
-			// updateText = cliTruncate(updateText, this.renderSettings.ttyColumns);
 		}
 
 		return { updateText, completed };
@@ -533,9 +528,10 @@ export default class Progress {
 
 	/**
 	 * complete(): finish progress bar
-	 * * no need to call unless you want completion to occur before goal is attained
+	 * * no need to call unless you want completion to occur before all goals are obtained
 	 */
-	complete(): void {
+	complete(cursorRest: CursorPosition = 'afterBlock'): void {
+		// ToDO: add support for all cursorRest positions
 		if (this.isCompleted) return;
 		const dynamicHeight = this.renderSettings.dynamicCompleteHeight;
 		// console.warn({ priorLines: this.priorLines });
@@ -575,16 +571,14 @@ export default class Progress {
 				}
 			}
 		}
-		// this.#writeLine();
-		// this.#cursorUp();
-		if (!isWinOS) {
+		// if (!isWinOS) {
+		if (cursorRest == 'afterBlock') {
 			this.#cursorToNextLine();
 			this.#cursorToLineStart();
 			this.#cursorPosition = 'afterBlock';
 		}
 		this.#showCursor();
 		this.isCompleted = true;
-		// console.warn('complete() finished');
 	}
 
 	/**
