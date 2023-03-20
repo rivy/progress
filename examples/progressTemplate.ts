@@ -11,7 +11,7 @@ const progress = new ProgressBar({
 	// progressTemplate: ':bar :elapsed'
 	// progressTemplate: '[:bar]'
 	// progressTemplate: 'hello :bar world'
-	progressTemplate: '{value}/{goal} hello! {elapsed} [{bar}] {percent} ({rate}; eta {eta})',
+	progressTemplate: '{value}/{goal} hello! {elapsed}s [{bar}] {percent}% ({rate}/s; eta {eta}s)',
 	// <== here
 });
 

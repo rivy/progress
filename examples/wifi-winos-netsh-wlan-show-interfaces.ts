@@ -51,6 +51,13 @@ let exit_requested = false;
 
 //===
 
+if (!isWinOS) {
+	console.warn('WinOS-only; exiting application.');
+	Deno.exit(1);
+}
+
+//===
+
 // function delay(ms = 0) {
 // 	return new Promise((resolve) => setTimeout(resolve, ms));
 // }
@@ -358,7 +365,7 @@ const fetchFn = async function (myID = fetchIntervalID) {
 		// progress.update(signalQuality, {
 		// 	barSymbolComplete: qualityLevel.signal,
 		// 	barSymbolIncomplete: qualityLevel.background,
-		// 	progressTemplate: `${prefix} * {percent} * {bar} *`,
+		// 	progressTemplate: `${prefix} * {percent}% * {bar} *`,
 		// });
 		const nameLengthMax = signalData.reduce((max, e) => {
 			const len = (e.interfaceData.get('Name') ?? '<unknown>').length;
@@ -380,7 +387,7 @@ const fetchFn = async function (myID = fetchIntervalID) {
 				return [signalQuality, {
 					barSymbolComplete: qualityLevel.signal,
 					barSymbolIncomplete: qualityLevel.background,
-					progressTemplate: `${prefix} * {percent} * {bar} *`,
+					progressTemplate: `${prefix} * {percent}% * {bar} *`,
 				}] as [number, UpdateOptions];
 			})
 			.sort((a, b) => {
@@ -390,6 +397,7 @@ const fetchFn = async function (myID = fetchIntervalID) {
 	}
 	if (exit_requested) {
 		progress.complete();
+		// console.log('info: application completed.');
 		Deno.exit(0);
 	}
 };

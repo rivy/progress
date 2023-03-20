@@ -8,30 +8,10 @@ const progress = new Progress({
 	minRenderInterval: 10,
 	// progressBarWidthMax: 100,
 	// Note: on Windows, if UTF-8 is not the default encoding for the terminal, such characters will not be displayed as expected.
-	progressTemplate: '{percent} [{bar}|{value}/{goal}] ({elapsed})',
+	progressTemplate: '{percent}% [{bar}|{value}/{goal}] ({elapsed}s)',
 	// ==> here
 	barSymbolComplete: '=',
 	barSymbolIncomplete: ' ',
-	barSymbolIntermediate: [
-		'>',
-		// // bgWhite(green('▏')),
-		// bgWhite(green('▎')),
-		// // bgWhite(green('▍')),
-		// bgWhite(green('▌')),
-		// // bgWhite(green('▋')),
-		// bgWhite(green('▊')),
-		// // bgWhite(green('▉')),
-		// //
-		// // bgWhite(green('-')),
-		// // bgWhite(green('/')),
-		// // bgWhite(green('|')),
-		// // bgWhite(green('\\')),
-		// // bgWhite(green('-')),
-		// // bgWhite(green('/')),
-		// // bgWhite(green('|')),
-		// // bgWhite(green('\\')),
-		// // bgGreen('*'),
-	],
 	barSymbolLeader: '>',
 	// <== here
 });

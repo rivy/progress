@@ -10,7 +10,7 @@ const progress = new Progress({
 	barSymbolComplete: '=',
 	barSymbolIncomplete: '-',
 	// <== here
-	completeTemplate: '{percent} {label}',
+	completeTemplate: '{percent}% {label}',
 });
 
 let completed = 0;

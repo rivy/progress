@@ -14,7 +14,7 @@ const bars = new Progress({
 	barSymbolIncomplete: '-',
 	// progressBarWidthMax: 100,
 	completeTemplate: '',
-	progressTemplate: '[{bar}] {label} {percent} (in {elapsed}) {value}/{goal}',
+	progressTemplate: '[{bar}] {label} {percent}% (in {elapsed}s) {value}/{goal}',
 	hideCursor: true,
 });
 

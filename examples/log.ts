@@ -30,12 +30,17 @@ function downloading() {
 			// progress.log(`${sprintf('%3s%% complete', asInteger.format(completed))}`);
 			progress.log($colors.cyan(`info: ${completed.toString().padStart(3, ' ')}% complete`));
 		}
-		completed += 1;
 		// <== here
-
+		// const complete = completed >= goal;
+		// if (complete) {
+		// 	progress.complete();
+		// } else {
 		setTimeout(function () {
 			downloading();
 		}, 50);
+		// }
+
+		completed += 1;
 	}
 }
 

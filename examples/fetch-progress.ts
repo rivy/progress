@@ -64,12 +64,12 @@ function nToEngineerScale(n: number) {
 
 function unitFrom(n: string) {
 	const conversions = new Map([
-		['e0', 'b'],
-		['e3', 'kb'],
-		['e6', 'Mb'],
-		['e9', 'Gb'],
-		['e12', 'Tb'],
-		['e15', 'Pb'],
+		['e0', 'B'],
+		['e3', 'kB'],
+		['e6', 'MB'],
+		['e9', 'GB'],
+		['e12', 'TB'],
+		['e15', 'PB'],
 	]);
 	// console.warn({ match: n.match(/(E\d+)$/) });
 	const [_, exp] = n.match(/(E\d+)$/) ?? [''];
@@ -78,12 +78,12 @@ function unitFrom(n: string) {
 
 function toUnits(n: string) {
 	const conversions = new Map([
-		['e0', 'b'],
-		['e3', 'kb'],
-		['e6', 'Mb'],
-		['e9', 'Gb'],
-		['e12', 'Tb'],
-		['e15', 'Pb'],
+		['e0', 'B'],
+		['e3', 'kB'],
+		['e6', 'MB'],
+		['e9', 'GB'],
+		['e12', 'TB'],
+		['e15', 'PB'],
 	]);
 	const [_, base, exp] = n.match(/^(.*?)(E\d+)$/) ?? [n, ''];
 	return `${base} ${conversions.get(`${exp}`.toLocaleLowerCase()) ?? ''}`.trimEnd();
@@ -94,7 +94,7 @@ const scaledTotal = nToEngineerScale(total);
 // const bareScaledTotal = total / (10 ** engScale);
 const bareScaledTotal = Number(scaledTotal.replace(/[Ee]\d+$/, ''));
 const unit = unitFrom(scaledTotal);
-// const asUnits = toUnits(scaledTotal);
+const asUnits = toUnits(scaledTotal);
 // console.warn({ total, engScale, scaledTotal, bareScaledTotal, unit, asUnits });
 
 // Deno.exit(0);
@@ -104,8 +104,9 @@ const progress = new Progress({
 	hideCursor: true,
 	label: `Fetching...`,
 	progressTemplate:
-		`Fetching file... * {percent} * {bar} {value}/{goal}${unit} ({elapsed}; {rate}; eta {eta})`,
-	minRenderInterval: 500,
+		`Fetching file... * {percent}% * {bar} {value}/${asUnits} ({elapsed}s; {rate}${unit}/s; eta {eta}s) :: ${url}`,
+	minRenderInterval: 100,
+	progressBarWidthMin: 20,
 });
 
 const f = new Intl.NumberFormat(undefined, {

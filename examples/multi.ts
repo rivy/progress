@@ -8,7 +8,7 @@ const bars = new Progress({
 	// clear: true,
 	barSymbolComplete: '=',
 	barSymbolIncomplete: '-',
-	progressTemplate: '[{bar}] {label} {percent} {elapsed} {value}/{goal}',
+	progressTemplate: '[{bar}] {label} {percent}% {elapsed}s {value}/{goal}',
 });
 
 let completed1 = 0;
