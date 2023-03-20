@@ -6,6 +6,7 @@ export { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.t
 
 export { default as cliSpinners } from 'https://esm.sh/cli-spinners@2.7.0';
 // export { default as GraphemeSplitter } from 'https://esm.sh/grapheme-splitter@1.0.4';
+export { default as cliTruncate } from 'https://esm.sh/cli-truncate@3.1.0';
 export { default as stringWidth } from 'https://esm.sh/string-width@5.1.2';
 
 //=== LCM of all cliSpinners frame sizes

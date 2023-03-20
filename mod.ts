@@ -18,7 +18,7 @@
 import { bgGreen, bgWhite, sprintf, writeAllSync } from './deps.ts';
 
 // import { cliSpinners, cliSpinnersFrameLCM } from './deps.ts';
-import { stringWidth } from './deps.ts';
+import { cliTruncate, stringWidth } from './deps.ts';
 // import { GraphemeSplitter as _ } from './deps.ts';
 
 import { consoleSize } from './src/lib/consoleSize.ts';
@@ -311,7 +311,7 @@ export default class Progress {
 	): void;
 	update(
 		_updates_: (number | [number, (UpdateOptions & { id?: string })?] | null)[],
-		_options_: { forceRender?: boolean },
+		_options_?: { forceRender?: boolean },
 	): void;
 	update(
 		updates_: number | (number | [number, (UpdateOptions & { id?: string })?] | null)[],
@@ -480,13 +480,16 @@ export default class Progress {
 			// * `stringWidth()` instead of `.length` to correctly count visual character column width of string, ignoring ANSI escapes
 			// ...eg, `\u{ff0a}` == "full-width asterisk" is otherwise incorrectly counted as a single character column wide
 			// ...eg, `0x1b[m*` == ANSI reset + '*' is otherwise incorrectly counted as a four character columns wide
-			let availableSpace = Math.max(
+			const availableSpace = Math.max(
 				0,
-				this.renderSettings.ttyColumns - stringWidth(updateText.replace('{bar}', '')),
+				this.renderSettings.ttyColumns - stringWidth(updateText.replace('{bar}', '')) - 1,
 			);
-			if ((availableSpace > 0) && isWinOS) availableSpace -= 1;
+			// if ((availableSpace > 0) && isWinOS) availableSpace -= 1;
 
-			const width = Math.min(options.progressBarWidthMax, availableSpace);
+			const width = Math.max(
+				Math.min(options.progressBarWidthMax, availableSpace),
+				options.progressBarWidthMin,
+			);
 
 			const partialSubGauge = options.barSymbolIntermediate;
 			const isPrecise = partialSubGauge.length > 1;
@@ -519,6 +522,10 @@ export default class Progress {
 			// console.warn({ complete, intermediary, leader, incomplete });
 
 			updateText = updateText.replace('{bar}', complete + intermediary + leader + incomplete);
+
+			// ToDO: handle lines > maxWidth; requires string calculation and manipulation which can handle dual-width unicode characters and ignore ANSI escapes
+			// updateText = cliTruncate(updateText, this.renderSettings.ttyColumns - 1);
+			updateText = cliTruncate(updateText, this.renderSettings.ttyColumns);
 		}
 
 		return { updateText, completed };
@@ -530,7 +537,6 @@ export default class Progress {
 	 */
 	complete(): void {
 		if (this.isCompleted) return;
-		this.isCompleted = true;
 		const dynamicHeight = this.renderSettings.dynamicCompleteHeight;
 		// console.warn({ priorLines: this.priorLines });
 		const finalLines: (typeof this.priorLines) = [];
@@ -571,7 +577,13 @@ export default class Progress {
 		}
 		// this.#writeLine();
 		// this.#cursorUp();
+		if (!isWinOS) {
+			this.#cursorToNextLine();
+			this.#cursorToLineStart();
+			this.#cursorPosition = 'afterBlock';
+		}
 		this.#showCursor();
+		this.isCompleted = true;
 	}
 
 	/**
@@ -608,7 +620,14 @@ export default class Progress {
 			if (!lastLineToRender) this.#cursorToNextLine();
 			this.#cursorPosition = 'blockEnd';
 		}
-		if (this.isCompleted) this.#showCursor();
+		if (this.isCompleted) {
+			if (!isWinOS) {
+				this.#cursorToNextLine();
+				this.#cursorToLineStart();
+				this.#cursorPosition = 'afterBlock';
+			}
+			this.#showCursor();
+		}
 	}
 
 	#writeLine(msg?: string): void {
@@ -625,6 +644,7 @@ export default class Progress {
 	/** Move cursor to beginning of current line */
 	#cursorToBlockStart() {
 		if (this.#cursorPosition == 'blockStart') return;
+		if (this.#cursorPosition == 'afterBlock') this.#cursorUp();
 		this.#cursorToLineStart();
 		if (this.priorLines.length > 0) this.#cursorUp(this.priorLines.length - 1);
 		// if (this.titleLines.length > 0) this.#cursorUp(this.titleLines.length - 1);
