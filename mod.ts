@@ -178,7 +178,7 @@ export default class Progress {
 		completed: boolean;
 		options: Required<UpdateOptions>;
 	}[] = [];
-	private priorUpdateTime = 0;
+	private priorRenderTime = 0;
 	// private renderFrame = 0; // for spinners
 	private titleLines: string[];
 	#cursorPosition: CursorPosition = 'blockStart';
@@ -304,13 +304,31 @@ export default class Progress {
 	 *   - `symbolIncomplete` - incomplete symbol
 	 *   - `symbolIntermediate` - intermediate symbols
 	 */
-	update(_value_: number, _options_?: (UpdateOptions & { id?: string })): void;
-	update(_updates_: (number | [number, (UpdateOptions & { id?: string })?] | null)[]): void;
+	update(
+		_value_: number,
+		_options_?: (UpdateOptions & { id?: string }) & { forceRender?: boolean },
+		_render_?: { forceRender: boolean },
+	): void;
+	update(
+		_updates_: (number | [number, (UpdateOptions & { id?: string })?] | null)[],
+		_options_: { forceRender?: boolean },
+	): void;
 	update(
 		updates_: number | (number | [number, (UpdateOptions & { id?: string })?] | null)[],
-		options_?: (UpdateOptions & { id?: string }),
+		options_?: ((UpdateOptions & { id?: string }) & { forceRender?: boolean }),
+		render_?: { forceRender?: boolean },
 	): void {
+		type PriorLine = typeof this.priorLines[number];
+
 		if (this.isCompleted || !this.display) return;
+		const forceRender = render_?.forceRender ?? options_?.forceRender ?? false;
+
+		const now = Date.now();
+		const msUpdateInterval = now - this.priorRenderTime;
+		if (!forceRender && (msUpdateInterval < this.renderSettings.minRenderInterval)) return;
+
+		this.priorRenderTime = now;
+
 		let updates: ([number, (Required<UpdateOptions> & { id?: string })] | null)[];
 		const defaultOptions = this.defaultUpdateSettings;
 		if (!Array.isArray(updates_)) {
@@ -326,12 +344,7 @@ export default class Progress {
 		}
 		// console.warn({ updates });
 
-		const now = Date.now();
-		const msUpdateInterval = now - this.priorUpdateTime;
-		if (msUpdateInterval < this.renderSettings.minRenderInterval) return;
-		this.priorUpdateTime = now;
-
-		const updatedLines: (typeof this.priorLines[number] | null)[] = [];
+		const updatedLines: (PriorLine | null)[] = [];
 
 		const linesForUpdate = Math.max(updates.length, this.priorLines.length);
 		for (let idx = 0; idx < linesForUpdate; idx++) {
