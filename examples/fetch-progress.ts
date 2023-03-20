@@ -31,6 +31,27 @@ function randomPick<T>(array: T[]) {
 	return array[n];
 }
 
+const isWinOS = Deno.build.os === 'windows';
+// ANSI CSI sequences; ref: <https://en.wikipedia.org/wiki/ANSI_escape_code> @@ <https://archive.is/CUtrX>
+const ansiCSI = {
+	clearEOL: '\x1b[0K',
+	clearEOS: '\x1b[0J',
+	clearLine: '\x1b[2K',
+	cursorUp: /* move cursor up {n} lines */ '\x1b[{n}A',
+	hideCursor: '\x1b[?25l',
+	showCursor: '\x1b[?25h',
+};
+import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.ts';
+
+['unload'].forEach((eventType) =>
+	addEventListener(eventType, (_: Event) => {
+		// ToDO: evaluate this for potential problems and conversion to a module of some kind
+		const encoder = new TextEncoder();
+		const msg = ansiCSI.cursorUp.replace('{n}', '1');
+		if (isWinOS) writeAllSync(Deno.stdout, encoder.encode(msg));
+	})
+);
+
 const urls = [
 	// from <https://github.com/denoland/deno/releases>
 	'https://github.com/denoland/deno/releases/download/v1.31.3/deno-aarch64-apple-darwin.zip',
