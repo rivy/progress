@@ -197,7 +197,7 @@ export default class Progress {
 	 * @param completeTemplate  progress display line content for completion, default: undefined
 	 * @param progressBarWidthMax  the maximum displayed width of the progress bar, default: 50 characters
 	 * @param progressBarWidthMin  the minimum displayed width of the progress bar, default: 10 characters
-	 * @param progressTemplate  progress display line content, default: '{label} {percent} {bar} {elapsed} {value}/{goal}'
+	 * @param progressTemplate  progress display line content, default: '{label} {percent}% {bar} ({elapsed}s) {value}/{goal}'
 	 * @param autoComplete  automatically `complete()` when goal is reached, default: true
 	 * @param clearAllOnComplete  clear the entire progress display upon completion, default: false
 	 * @param displayAlways  avoid TTY check on writer and always display progress, default: false
@@ -218,7 +218,7 @@ export default class Progress {
 		label = '',
 		progressBarWidthMax = 50, // characters
 		progressBarWidthMin = 10, // characters
-		progressTemplate = '{label} {percent} {bar} ({elapsed}) {value}/{goal}',
+		progressTemplate = '{label} {percent}% {bar} ({elapsed}s) {value}/{goal}',
 		autoCompleteOnAllComplete = true,
 		clearAllOnComplete = false,
 		displayAlways = false,
@@ -422,7 +422,7 @@ export default class Progress {
 		const completed = options.autoComplete && (v >= goal);
 
 		const elapsed = sprintf(
-			'%ss', /* in seconds */
+			'%s', /* in seconds */
 			new Intl.NumberFormat(undefined, {
 				minimumIntegerDigits: 1,
 				minimumFractionDigits: 1,
@@ -432,7 +432,7 @@ export default class Progress {
 		);
 
 		const eta = sprintf(
-			'%ss', /* in seconds */
+			'%s', /* in seconds */
 			new Intl.NumberFormat(undefined, {
 				minimumIntegerDigits: 1,
 				minimumFractionDigits: 1,
@@ -442,7 +442,7 @@ export default class Progress {
 		);
 
 		const percent = sprintf(
-			'%3s%%',
+			'%3s',
 			new Intl.NumberFormat(undefined, {
 				minimumIntegerDigits: 1,
 				minimumFractionDigits: 0,
@@ -452,7 +452,7 @@ export default class Progress {
 		);
 
 		const rate = sprintf(
-			'%s/s', /* per second */
+			'%s', /* per second */
 			new Intl.NumberFormat(undefined, {
 				minimumIntegerDigits: 1,
 				minimumFractionDigits: 2,
@@ -524,8 +524,8 @@ export default class Progress {
 			updateText = updateText.replace('{bar}', complete + intermediary + leader + incomplete);
 
 			// ToDO: handle lines > maxWidth; requires string calculation and manipulation which can handle dual-width unicode characters and ignore ANSI escapes
-			// updateText = cliTruncate(updateText, this.renderSettings.ttyColumns - 1);
-			updateText = cliTruncate(updateText, this.renderSettings.ttyColumns);
+			updateText = cliTruncate(updateText, this.renderSettings.ttyColumns - 1);
+			// updateText = cliTruncate(updateText, this.renderSettings.ttyColumns);
 		}
 
 		return { updateText, completed };
@@ -584,6 +584,7 @@ export default class Progress {
 		}
 		this.#showCursor();
 		this.isCompleted = true;
+		// console.warn('complete() finished');
 	}
 
 	/**
