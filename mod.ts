@@ -15,11 +15,11 @@
 // ref: [](https://github.com/sindresorhus/ora)
 // ref: [](https://www.npmjs.com/package/awesome-logging)
 
-// ToDO: *review* <https://www.npmjs.com/package/progress> for custom tokens (see <https://github.com/visionmedia/node-progress/blob/master/lib/node-progress.js>)
-// ToDO: *review* use of container in <https://www.npmjs.com/package/bespoke-progress>
-// ToDO: *review* <https://www.npmjs.com/package/cli-progress> for API
-// ToDO: *review* <https://www.npmjs.com/package/multi-progress-bars> for spinners
-// ToDO: add `isComplete()`, pause()/resume(), methods
+// DONE/ToDO: *review* <https://www.npmjs.com/package/progress> for custom tokens (see <https://github.com/visionmedia/node-progress/blob/master/lib/node-progress.js>)
+// ToDO: [2023-03; rivy] *review* use of container in <https://www.npmjs.com/package/bespoke-progress>
+// ToDO: [2023-03; rivy] *review* <https://www.npmjs.com/package/cli-progress> for API
+// ToDO: [2023-03; rivy] *review* <https://www.npmjs.com/package/multi-progress-bars> for spinners
+// ToDO: [2023-03; rivy] add `isComplete()`, pause()/resume(), methods
 
 // import { stripColor } from 'https://deno.land/std@0.126.0/fmt/colors.ts';
 import { bgGreen, bgWhite, sprintf, writeAllSync } from './deps.ts';
@@ -30,10 +30,11 @@ import { cliTruncate, stringWidth } from './deps.ts';
 
 import { consoleSize } from './src/lib/consoleSize.ts';
 
-// ToDO: implement STDIN discarding (see https://www.npmjs.com/package/stdin-discarder; use `Deno.stdin.setRaw()`, ...)
-//   ... * note: `Deno.stdin.setRaw(false)` will need Deno version >= v1.31.2 for correct restoration of STDIN input handling (see GH:denoland/deno#17866 with fix GH:denoland/deno#17983)
+// ToDO: [2023-03; rivy] implement STDIN discarding (see https://www.npmjs.com/package/stdin-discarder; use `Deno.stdin.setRaw()`, ...)
+//  #... * note: `Deno.stdin.setRaw(false)` will need Deno version >= v1.31.2 for correct restoration of STDIN input handling (see GH:denoland/deno#17866 with fix GH:denoland/deno#17983)
+//  #... just using an input loop can discard all but CTRL-BREAK which would require a signal hook (example `wifi-winos-netsh-wlan-show-interfaces.ts` contains an implementation)
 
-// FixME: investigate relationship between update interval calls and minRenderInterval ; some updates can result in `completed` with a value slightly less than `goal`
+// FixME: [2023-03; rivy] investigate relationship between update interval calls and minRenderInterval ; some updates can result in `completed` with a value slightly less than `goal`
 //    ... *early-complete-bug-example.ts* can show this
 
 //===
@@ -44,15 +45,16 @@ const LF = '\n';
 
 // spell-checker:ignore (WinOS) CONOUT
 
-// ToDO: [in progress...] for bar arrangement flexibility and dynamic vertical size ... implement ID system; array position as implicit ID if not specified
-//   ... save line state to related ID and save display state for redraws
-// ToDO: implement spinners
-// ToDO: implement widgets and/or ES-6 template compatible format strings
+// ToDO: [2023-03; rivy; in progress...] for bar arrangement flexibility and dynamic vertical size ... implement ID system; array position as implicit ID if not specified
+//  #... save line state to related ID and save display state for redraws
+// ToDO: [2023-03; rivy] implement spinners
+// ToDO: [2023-03; rivy] implement widgets and/or ES-6 template compatible format strings
 
-// ToDO: handle title and log messages containing multiple lines
-// ToDO: only use first line of any label (discarding any CR/LF and beyond of label string)
-// ToDO: `cursorRest = 'after' | 'start' | 'end' | 'block_start'`, default = after
-// ToDO: ES6-template compatible format strings
+// DONE: [2023-03; rivy] handle title and log messages containing multiple lines
+// ToDO: [2023-03; rivy] only use first line of any label (discarding any CR/LF and beyond of label string)
+// ToDO: [2023-03; rivy] `cursorRest = 'after' | 'start' | 'end' | 'block_start'`, default = after
+// ToDO: [2023-03; rivy] maybe, ES6-template compatible format strings
+//  #... or, instead implement custom token replacements; seems simpler and equivalent in functionality (DONE as of [2023-03-22; rivy])
 // ref: <>
 // ```js
 // const fill = function(template: string, vars = {}) {
@@ -63,8 +65,8 @@ const LF = '\n';
 //
 // const s = 10; console.log(fill('s=${s.toString().padStart(4,`.`)}',{s}));"
 // ```
-// ToDO: add ability/option to write directly to console via '$CONOUT' or '/dev/tty' avoiding writes to STDOUT or STDERR
-// ToDO: add `pause(clearOnPause: boolean = true)` which could be used for the controller to cleanly print to STDERR/OUT and then `resume()`
+// ToDO: [2023-03; rivy] add ability/option to write directly to console via '$CONOUT' or '/dev/tty' avoiding writes to STDOUT or STDERR
+// ToDO: [2023-03; rivy] add `pause(clearOnPause: boolean = true)` which could be used for the controller to cleanly print to STDERR/OUT and then `resume()`
 
 // ANSI CSI sequences; ref: <https://en.wikipedia.org/wiki/ANSI_escape_code> @@ <https://archive.is/CUtrX>
 const ansiCSI = {
@@ -86,7 +88,7 @@ export interface RenderConfigOptions {
 	dynamicUpdateHeight?: boolean;
 	hideCursor?: boolean;
 	minRenderInterval?: number;
-	title?: string | string[]; // ToDO: string | string[]
+	title?: string | string[];
 	ttyColumns?: number;
 	writer?: Deno.WriterSync & { rid: number };
 }
@@ -112,7 +114,7 @@ type ProgressConstructionOptions = RenderConfigOptions & /* default */ UpdateOpt
 
 // type ProgressUpdateObject = { value: number; options?: updateOptions };
 
-// ToDO: add built-in soft exit reset to show cursor (and, if using keypress() to consume input, dispose() and reset to 'cooked' input mode)
+// ToDO: [2023-03; rivy] add built-in soft exit reset to show cursor (and, if using keypress() to consume input, dispose() and reset to 'cooked' input mode)
 /** Open a file specified by `path`, using `options`.
  * * _`no-throw`_ function (returns `undefined` upon any error)
  * @returns an instance of `Deno.FsFile`
@@ -302,7 +304,7 @@ export default class Progress {
 	// 	this.ttyColumns = ttySize(writer.rid)?.columns ?? 80;
 	// }
 
-	// ToDO: add ability for elements of update array to be null/undefined as NOOP for the corresponding Progress display line
+	// ToDO: [2023-03; rivy] add ability for elements of update array to be null/undefined as NOOP for the corresponding Progress display line
 	/**
 	 * update/render progress
 	 *
@@ -375,7 +377,7 @@ export default class Progress {
 		}
 		// console.warn({ updatedLines });
 
-		{ // update display // ToDO: revise as method
+		{ // update display // ToDO: [2023-03; rivy] revise as method
 			const nextLines: typeof this.priorLines = [];
 			const dynamicHeight = this.renderSettings.dynamicUpdateHeight;
 			const priorDisplayHeight = this.priorLines.length;
@@ -472,9 +474,12 @@ export default class Progress {
 		);
 
 		// replace template tokens
-		// ToDO: investigate the fact that subsequent replacements (if matching) can replace *prior replacements*
+		// ToDO: [2023-03; rivy] investigate the fact that subsequent replacements (if matching) can replace *prior replacements*
 		//  #... alternative would be construction of a regex combining all overrides and standard tokens for a single pass update
-		// ToDO: add lazy replacements for standard tokens to avoid formatting overhead? benchmark?
+		// ToDO: [2023-03; rivy] add lazy replacements for standard tokens to avoid formatting overhead? benchmark?
+		// ToDO: [2023-03; rivy] investigate ~ maybe check for leading/trailing single whitespace character and fully replace just as `{label}` for all tokens?
+		//  #... or just trim whitespace (maybe optionally [start,end, all]) the updateText
+		//  #... ultimately, would like to remove the special case
 		const label = options.label;
 		const template = (completed ? options.completeTemplate : undefined) ?? options.progressTemplate;
 		let updateText = template;
@@ -514,7 +519,7 @@ export default class Progress {
 			const partialSubGauge = options.barSymbolIntermediate;
 			const isPrecise = partialSubGauge.length > 1;
 
-			// ToDO: deal correctly with unicode character variable widths
+			// ToDO: [2023-03; rivy] deal correctly with unicode character variable widths
 			// :bar
 			const completeWidth = width * v / goal;
 			const wholeCompleteWidth = Math.floor(completeWidth);
@@ -533,7 +538,7 @@ export default class Progress {
 
 			// console.warn({ width, completeWidth, wholeCompleteWidth, incompleteWidth });
 
-			// ToDO: enforce symbols as single graphemes (ignoring ANSI escapes)
+			// ToDO: [2023-03; rivy] enforce symbols as single graphemes (ignoring ANSI escapes)
 			const complete = new Array(wholeCompleteWidth).fill(options.barSymbolComplete).join('');
 			const incomplete = new Array(Math.max(incompleteWidth, 0))
 				.fill(options.barSymbolIncomplete)
@@ -553,7 +558,7 @@ export default class Progress {
 	 * * no need to call unless you want completion to occur before all goals are obtained
 	 */
 	complete(cursorRest: CursorPosition = 'afterBlock'): void {
-		// ToDO: add support for all cursorRest positions
+		// ToDO: [2023-03; rivy] add support for all cursorRest positions
 		if (this.isCompleted) return;
 		const dynamicHeight = this.renderSettings.dynamicCompleteHeight;
 		// console.warn({ priorLines: this.priorLines });

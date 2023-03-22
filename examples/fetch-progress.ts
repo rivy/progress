@@ -46,7 +46,7 @@ import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.t
 
 ['unload'].forEach((eventType) =>
 	addEventListener(eventType, (_: Event) => {
-		// ToDO: evaluate this for potential problems and conversion to a module of some kind
+		// ToDO: [2023-03; rivy] evaluate this for potential problems and conversion to a module of some kind
 		const encoder = new TextEncoder();
 		const msg = ansiCSI.cursorUp.replace('{n}', '1');
 		if (isWinOS) writeAllSync(Deno.stdout, encoder.encode(msg));
@@ -54,7 +54,7 @@ import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.t
 );
 
 const urls = [
-	// ToDO: add support for files and file URLs
+	// ToDO: [2023-03; rivy] add support for files and file URLs
 	// 'file://nas-3/vault/#local/TIKI-1+Roy.Downloads/nikcollection-full-1.2.11.exe', // spell-checker:ignore (names) NikCollection
 	// from <https://github.com/denoland/deno/releases>
 	'https://github.com/denoland/deno/releases/download/v1.31.3/deno-aarch64-apple-darwin.zip',

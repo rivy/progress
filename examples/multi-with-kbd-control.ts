@@ -1,5 +1,6 @@
-// ToDO: add keyboard control using cliffy code for a keyboard consumer
-// ToDO: add SIGBREAK handler to enable smooth/soft exits with restoration of cursor and cooked input mode
+// ToDO: [2023-03; rivy] add keyboard control using cliffy code for a keyboard consumer
+// ToDO: [2023-03; rivy] add SIGBREAK handler to enable smooth/soft exits with restoration of cursor and cooked input mode
+//  #... example `wifi-winos-netsh-wlan-show-interfaces.ts` has an implementation
 
 import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.ts';
 

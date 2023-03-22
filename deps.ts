@@ -24,7 +24,7 @@ const cliSpinnerFrameSizes = cliSpinnerNames.map((name) =>
 	(cliSpinners as any)[name].frames.length
 );
 
-// ToDO: remove calculation time by precalculating, using result as a numeric constant, and adding test (using this algorithm) to verify correctness
+// ToDO: [2023-03; rivy] remove calculation time by precalculating, using result as a numeric constant, and adding test (using this algorithm) to verify correctness
 export const cliSpinnersFrameLCM = lcmOfAll(
 	[...new Set(cliSpinnerFrameSizes)].sort((a, b) => a - b).filter((e) => e != null),
 );
