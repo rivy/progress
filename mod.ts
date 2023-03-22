@@ -15,6 +15,11 @@
 // ref: [](https://github.com/sindresorhus/ora)
 // ref: [](https://www.npmjs.com/package/awesome-logging)
 
+// ToDO: *review* <https://www.npmjs.com/package/progress> for custom tokens (see <https://github.com/visionmedia/node-progress/blob/master/lib/node-progress.js>)
+// ToDO: *review* use of container in <https://www.npmjs.com/package/bespoke-progress>
+// ToDO: *review* <https://www.npmjs.com/package/cli-progress> for API
+// ToDO: add `isComplete()`, pause()/resume(), methods
+
 import { bgGreen, bgWhite, sprintf, writeAllSync } from './deps.ts';
 
 // import { cliSpinners, cliSpinnersFrameLCM } from './deps.ts';
