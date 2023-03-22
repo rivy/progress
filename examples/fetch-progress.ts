@@ -67,10 +67,19 @@ const urls = [
 // console.warn({ natural: chance.natural(), pick: randomPick(urls) });
 // Deno.exit(0);
 
-function engineeringScaleOf(n: number) {
-	return Math.floor(Math.log10(n) / 3) * 3;
+// coefficient()
+/** Coefficient of number in engineering or scientific notation (as string to maintain precision)
+ */
+function coefficient(n: string) {
+	return n.replace(/[Ee]\d+$/, '');
 }
-function nToEngineerScale(n: number) {
+function scientificExponentOf(n: number) {
+	return Math.floor(Math.log10(n));
+}
+function engineeringExponentOf(n: number) {
+	return Math.floor(scientificExponentOf(n) / 3) * 3;
+}
+function toEngineeringNotation(n: number) {
 	// const logScale = engineeringScaleOf(n);
 	const f = new Intl.NumberFormat(undefined, {
 		minimumSignificantDigits: 4,
@@ -80,7 +89,7 @@ function nToEngineerScale(n: number) {
 	return f.format(n);
 }
 
-function unitFrom(n: string) {
+function unitFromEng(n: string) {
 	const conversions = new Map([
 		['e0', 'B'],
 		['e3', 'kB'],
@@ -94,7 +103,7 @@ function unitFrom(n: string) {
 	return `${conversions.get(`${exp}`.toLocaleLowerCase()) ?? ''}`;
 }
 
-function toUnits(n: string) {
+function toUnitsFromEng(n: string) {
 	const conversions = new Map([
 		['e0', 'B'],
 		['e3', 'kB'],
@@ -113,29 +122,23 @@ const filename = $path.basename(url);
 const response = await fetch(url);
 const total = Number(response.headers.get('content-length'));
 
-const engScale = engineeringScaleOf(total);
-const scaledTotal = nToEngineerScale(total);
-// const bareScaledTotal = total / (10 ** engScale);
-const bareScaledTotal = Number(scaledTotal.replace(/[Ee]\d+$/, ''));
-const unit = unitFrom(scaledTotal);
-const asUnits = toUnits(scaledTotal);
+const engineeringOOM = engineeringExponentOf(total); // engineering order-of-magnitude
+const engTotal = toEngineeringNotation(total);
+const coefEngTotal = coefficient(engTotal); // coefficient of number // spell-checker:ignore (vars) coef
+const unit = unitFromEng(engTotal);
+const asUnits = toUnitsFromEng(engTotal);
 // console.warn({ total, engScale, scaledTotal, bareScaledTotal, unit, asUnits });
 
 // Deno.exit(0);
 
 const progress = new Progress({
-	goal: bareScaledTotal,
+	goal: Number(coefEngTotal),
 	hideCursor: true,
 	label: `Fetching...`,
 	progressTemplate:
 		`Fetching file... * {percent}% * {bar} {value}/${asUnits} ({elapsed}s; {rate}${unit}/s; eta {eta}s) :: ${url}`,
 	minRenderInterval: 100,
 	progressBarWidthMin: 20,
-});
-
-const f = new Intl.NumberFormat(undefined, {
-	minimumSignificantDigits: 4,
-	maximumSignificantDigits: 4,
 });
 
 const reader = response.body?.getReader();
@@ -146,12 +149,24 @@ while (true) {
 	if (received != null) {
 		bytesReceived += received;
 		// console.log(`Received ${bytesReceived} bytes (of ${total} data)'`);
-		const value = Number(f.format(bytesReceived / (10 ** engScale)).replace(/[Ee]\d+$/, ''));
-		progress.update(value);
+		// const value = f
+		// 	// .format(bytesReceived / (10 ** engScale))
+		// 	.format((Math.round(bytesReceived / (10 ** engScale) * 1000) + Number.EPSILON) / 1000)
+		// 	.replace(/[Ee]\d+$/, '')
+		// 	.slice(0, 5);
+		const f = new Intl.NumberFormat(undefined, {
+			minimumSignificantDigits: 4,
+			maximumSignificantDigits: 4,
+			maximumFractionDigits: 3,
+		});
+		const value = f
+			.format((Math.round(bytesReceived / (10 ** engineeringOOM) * 1000) + Number.EPSILON) / 1000)
+			.slice(0, 5);
+		progress.update(Number(value), { tokenOverrides: [['value', value]] });
 	}
 	if (result?.done) {
 		progress.log($colors.cyan(`info: Fetch complete ('${filename}')`));
-		progress.update(total, { forceRender: true });
+		progress.update(total, { forceRender: true, tokenOverrides: [['value', coefEngTotal]] });
 		// progress.complete();
 		break;
 	}
