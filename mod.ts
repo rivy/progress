@@ -18,8 +18,10 @@
 // ToDO: *review* <https://www.npmjs.com/package/progress> for custom tokens (see <https://github.com/visionmedia/node-progress/blob/master/lib/node-progress.js>)
 // ToDO: *review* use of container in <https://www.npmjs.com/package/bespoke-progress>
 // ToDO: *review* <https://www.npmjs.com/package/cli-progress> for API
+// ToDO: *review* <https://www.npmjs.com/package/multi-progress-bars> for spinners
 // ToDO: add `isComplete()`, pause()/resume(), methods
 
+// import { stripColor } from 'https://deno.land/std@0.126.0/fmt/colors.ts';
 import { bgGreen, bgWhite, sprintf, writeAllSync } from './deps.ts';
 
 // import { cliSpinners, cliSpinnersFrameLCM } from './deps.ts';
@@ -103,6 +105,7 @@ export interface UpdateOptions {
 	progressBarWidthMax?: number;
 	progressBarWidthMin?: number;
 	progressTemplate?: string;
+	tokenOverrides?: [string, string][];
 }
 
 type ProgressConstructionOptions = RenderConfigOptions & /* default */ UpdateOptions;
@@ -224,6 +227,7 @@ export default class Progress {
 		progressBarWidthMax = 50, // characters
 		progressBarWidthMin = 10, // characters
 		progressTemplate = '{label} {percent}% {bar} ({elapsed}s) {value}/{goal}',
+		tokenOverrides = [],
 		autoCompleteOnAllComplete = true,
 		clearAllOnComplete = false,
 		displayAlways = false,
@@ -249,6 +253,7 @@ export default class Progress {
 			progressBarWidthMax,
 			progressBarWidthMin,
 			progressTemplate,
+			tokenOverrides,
 		};
 		this.renderSettings = {
 			autoCompleteOnAllComplete,
@@ -466,12 +471,23 @@ export default class Progress {
 				.format(v / (age / 1000)),
 		);
 
-		// {elapsed} {eta} {goal} {percent} {rate} {value} {label} {bar}
+		// replace template tokens
+		// ToDO: investigate the fact that subsequent replacements (if matching) can replace *prior replacements*
+		//  #... alternative would be construction of a regex combining all overrides and standard tokens for a single pass update
+		// ToDO: add lazy replacements for standard tokens to avoid formatting overhead? benchmark?
 		const label = options.label;
 		const template = (completed ? options.completeTemplate : undefined) ?? options.progressTemplate;
-		let updateText = null;
-		if (template != null) {
-			updateText = template
+		let updateText = template;
+		if (updateText != null) {
+			// replace all token overrides
+			for (let i = 0; i < options.tokenOverrides.length; i++) {
+				const token = `{${options.tokenOverrides[i][0]}}`;
+				const tokenReplacement = `${options.tokenOverrides[i][1]}`;
+				updateText = updateText.replace(token, tokenReplacement);
+				// console.warn({ updateText });
+			}
+			// replace all (remaining) standard tokens
+			updateText = updateText
 				.replaceAll('{elapsed}', elapsed)
 				.replaceAll('{eta}', eta)
 				.replaceAll('{goal}', goal + '')
@@ -528,6 +544,7 @@ export default class Progress {
 			updateText = cliTruncate(updateText, this.renderSettings.ttyColumns - 1);
 		}
 
+		// console.warn({ updateText: stripColor(updateText) });
 		return { updateText, completed };
 	}
 
