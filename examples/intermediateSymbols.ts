@@ -1,4 +1,4 @@
-import { bgGreen, bgWhite, green } from 'https://deno.land/std@0.74.0/fmt/colors.ts';
+import { /* bgGreen, */ bgWhite, green } from 'https://deno.land/std@0.74.0/fmt/colors.ts';
 import Progress from '../mod.ts';
 
 const goal = 1000;
