@@ -7,6 +7,7 @@
 // ref: <https://stackoverflow.com/questions/35711724/upload-progress-indicators-for-fetch>
 // ref: <https://stackoverflow.com/questions/36453950/upload-file-with-fetch-api-in-javascript-and-show-progress>
 // ref: <https://stackoverflow.com/a/54137265/43774>
+// ref: <https://stackoverflow.com/questions/47285198/fetch-api-download-progress-indicator>
 
 import * as $colors from 'https://deno.land/std@0.126.0/fmt/colors.ts';
 import * as $path from 'https://deno.land/std@0.149.0/path/mod.ts';
@@ -53,6 +54,8 @@ import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.t
 );
 
 const urls = [
+	// ToDO: add support for files and file URLs
+	// 'file://nas-3/vault/#local/TIKI-1+Roy.Downloads/nikcollection-full-1.2.11.exe', // spell-checker:ignore (names) NikCollection
 	// from <https://github.com/denoland/deno/releases>
 	'https://github.com/denoland/deno/releases/download/v1.31.3/deno-aarch64-apple-darwin.zip',
 	'https://github.com/denoland/deno/releases/download/v1.31.3/deno-x86_64-apple-darwin.zip',
@@ -63,12 +66,6 @@ const urls = [
 // console.warn({ ChanceM, chance });
 // console.warn({ natural: chance.natural(), pick: randomPick(urls) });
 // Deno.exit(0);
-
-const url = randomPick(urls);
-const filename = $path.basename(url);
-
-const response = await fetch(url);
-const total = Number(response.headers.get('content-length'));
 
 function engineeringScaleOf(n: number) {
 	return Math.floor(Math.log10(n) / 3) * 3;
@@ -110,6 +107,12 @@ function toUnits(n: string) {
 	return `${base} ${conversions.get(`${exp}`.toLocaleLowerCase()) ?? ''}`.trimEnd();
 }
 
+const url = randomPick(urls);
+const filename = $path.basename(url);
+
+const response = await fetch(url);
+const total = Number(response.headers.get('content-length'));
+
 const engScale = engineeringScaleOf(total);
 const scaledTotal = nToEngineerScale(total);
 // const bareScaledTotal = total / (10 ** engScale);
@@ -134,6 +137,7 @@ const f = new Intl.NumberFormat(undefined, {
 	minimumSignificantDigits: 4,
 	maximumSignificantDigits: 4,
 });
+
 const reader = response.body?.getReader();
 let bytesReceived: number | null = 0;
 while (true) {
