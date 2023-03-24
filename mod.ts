@@ -85,6 +85,15 @@ const ansiCSI = {
 
 const ttySize = await consoleSize(); // async global b/c `Deno.consoleSize()` lost functionality when stabilized (see GH:denoland/deno#17982)
 
+export interface ProgressBarOptions {
+	symComplete?: string;
+	symIncomplete?: string;
+	symIntermediates?: string[];
+	symLeader?: string;
+	widthMax?: number;
+	widthMin?: number;
+}
+
 export interface RenderConfigOptions {
 	autoCompleteOnAllComplete?: boolean;
 	clearAllOnComplete?: boolean;
@@ -197,6 +206,7 @@ export default class Progress {
 	// private renderFrame = 0; // for spinners
 	private titleLines: string[];
 	#cursorPosition: CursorPosition = 'blockStart';
+	#progressBarSymbolWidth = 1;
 
 	private encoder = new TextEncoder();
 
@@ -246,6 +256,18 @@ export default class Progress {
 		ttyColumns = ttySize?.columns ?? 80,
 		writer = Deno.stderr,
 	}: ProgressConstructionOptions = {}) {
+		// convert all symbols to a common display width
+		this.#progressBarSymbolWidth = Math.max(
+			stringWidth(progressBarSymbolComplete),
+			stringWidth(progressBarSymbolIncomplete),
+			...progressBarSymbolIntermediate.map((e) => stringWidth(e)),
+			stringWidth(progressBarSymbolLeader),
+		);
+		// max/min bar widths must be a multiple of symbol width
+		// * max - round down; min - round up
+		progressBarWidthMin += progressBarWidthMin % this.#progressBarSymbolWidth;
+		progressBarWidthMax -= progressBarWidthMax % this.#progressBarSymbolWidth;
+		// normalizeBarSettings(...): {...};
 		this.defaultUpdateSettings = {
 			autoComplete,
 			clearOnComplete,
@@ -519,38 +541,65 @@ export default class Progress {
 				this.renderSettings.ttyColumns - stringWidth(updateText.replace('{bar}', '')) - 1,
 			);
 
+			/** ProgressBar display width (in [narrow/single-width] characters) */
 			const width = Math.max(
 				Math.min(options.progressBarWidthMax, availableSpace),
 				options.progressBarWidthMin,
 			);
 
 			const partialSubGauge = options.progressBarSymbolIntermediate;
-			const isPrecise = partialSubGauge.length > 1;
+			const isPrecise = (partialSubGauge.length > 0);
 
-			// ToDO: [2023-03; rivy] deal correctly with unicode character variable widths
+			// DONE/ToDO: [2023-03; rivy] deal correctly with unicode character variable widths
 			// :bar
-			const completeWidth = width * v / goal;
-			const wholeCompleteWidth = Math.floor(completeWidth);
+			const completeWidth = width * (v / goal);
+			const fullyCompleteWidth = Math.floor(completeWidth);
+			const alignedCompleteWidth = fullyCompleteWidth -
+				(fullyCompleteWidth % this.#progressBarSymbolWidth);
 
 			let intermediary = '';
-			if (isPrecise) {
-				const partialLength = completeWidth - wholeCompleteWidth;
-				intermediary = completed
-					? ''
-					: partialSubGauge[Math.floor(partialSubGauge.length * partialLength)];
+			const partialPercentage = (completeWidth - alignedCompleteWidth) /
+				this.#progressBarSymbolWidth;
+			const subBarElementN = (partialPercentage > 0)
+				? Math.floor(partialSubGauge.length * partialPercentage)
+				: undefined;
+			if (isPrecise && !completed && (subBarElementN != null)) {
+				intermediary = partialSubGauge[subBarElementN];
 			}
-			const leader = completed ? '' : options.progressBarSymbolLeader;
+			const anyCompleteWidth = alignedCompleteWidth + stringWidth(intermediary);
+			const leader = (completed || (anyCompleteWidth >= width))
+				? ''
+				: options.progressBarSymbolLeader;
 
-			const incompleteWidth = width - wholeCompleteWidth - stringWidth(intermediary) -
+			const incompleteWidth = width - alignedCompleteWidth - stringWidth(intermediary) -
 				stringWidth(leader);
 
-			// console.warn({ width, completeWidth, wholeCompleteWidth, incompleteWidth });
+			// console.warn({
+			// 	// partialSubGauge,
+			// 	// pSGLength: partialSubGauge.length,
+			// 	// isPrecise,
+			// 	// completed,
+			// 	width,
+			// 	completeWidth,
+			// 	fullyCompleteWidth,
+			// 	alignedCompleteWidth,
+			// 	partialPercentage,
+			// 	subBarElementN,
+			// 	intermediary,
+			// 	incompleteWidth,
+			// });
 
-			// ToDO: [2023-03; rivy] enforce symbols as single graphemes (ignoring ANSI escapes)
-			const complete = new Array(wholeCompleteWidth).fill(options.progressBarSymbolComplete).join(
-				'',
-			);
-			const incomplete = new Array(Math.max(incompleteWidth, 0))
+			// ! ToDO?: [2023-03; rivy] enforce symbols as single graphemes (ignoring ANSI escapes)
+			// #... maybe just suggest in docs that all symbols be of the same length
+			// #... or enforce same length with automatic string extension of symbols
+			// #... * what about colorization?
+			// #... * maybe just add additional symbols ?, (�) U+FFFD REPLACEMENT CHARACTER,or □ (WHITE SQUARE, U+25A1) as a visual alert but still works
+			// #... * DON'T force, just document that the bar will change widths if all "symbols" aren't of the same display width
+			// #... * ... maybe warn with a warning suppression option?
+			const complete = new Array(alignedCompleteWidth / this.#progressBarSymbolWidth)
+				.fill(options.progressBarSymbolComplete)
+				.join('');
+			const incomplete = new Array(Math.max(incompleteWidth / this.#progressBarSymbolWidth, 0))
 				.fill(options.progressBarSymbolIncomplete)
 				.join('');
 
