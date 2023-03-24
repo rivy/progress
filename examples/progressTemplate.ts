@@ -4,8 +4,8 @@ const goal = 100;
 
 const progress = new ProgressBar({
 	goal,
-	barSymbolComplete: '=',
-	barSymbolIncomplete: '-',
+	progressBarSymbolComplete: '=',
+	progressBarSymbolIncomplete: '-',
 	// here ==>
 	// progressTemplate: ':bar'
 	// progressTemplate: ':bar :elapsed'

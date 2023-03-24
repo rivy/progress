@@ -6,8 +6,8 @@ const total = 100;
 const bars = new Progress({
 	title,
 	// clear: true,
-	barSymbolComplete: '=',
-	barSymbolIncomplete: '-',
+	progressBarSymbolComplete: '=',
+	progressBarSymbolIncomplete: '-',
 	progressTemplate: '[{bar}] {label} {percent}% {elapsed}s {value}/{goal}',
 });
 
@@ -18,10 +18,11 @@ function downloading() {
 	if (completed1 <= total || completed2 <= total) {
 		completed1 += 1;
 		completed2 += 2;
-		bars.update([
-			[completed1, { label: 'file1', barSymbolComplete: '*', barSymbolIncomplete: '.' }],
-			[completed2, { label: 'file2' }],
-		]);
+		bars.update([[completed1, {
+			label: 'file1',
+			progressBarSymbolComplete: '*',
+			progressBarSymbolIncomplete: '.',
+		}], [completed2, { label: 'file2' }]]);
 
 		setTimeout(function () {
 			downloading();

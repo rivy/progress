@@ -5,8 +5,8 @@ const goal = 100;
 
 const progress = new Progress({
 	goal,
-	barSymbolComplete: red('='),
-	barSymbolIncomplete: yellow('-'),
+	progressBarSymbolComplete: red('='),
+	progressBarSymbolIncomplete: yellow('-'),
 	// clearOnComplete: true,
 });
 
@@ -17,15 +17,15 @@ function run() {
 		if (completed >= 50) {
 			progress.update(completed++, {
 				// ==> here
-				barSymbolComplete: green('='),
-				barSymbolIncomplete: '-',
+				progressBarSymbolComplete: green('='),
+				progressBarSymbolIncomplete: '-',
 				// <== here
 			});
 		} else if (completed >= 25) {
 			progress.update(completed++, {
 				// ==> here
-				barSymbolComplete: green('='),
-				// barSymbolIncomplete: '-',
+				progressBarSymbolComplete: green('='),
+				// progressBarSymbolIncomplete: '-',
 				// <== here
 			});
 		} else {

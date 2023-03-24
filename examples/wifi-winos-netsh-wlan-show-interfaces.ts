@@ -363,8 +363,8 @@ const fetchFn = async function (myID = fetchIntervalID) {
 		// } @ ${dBm.toFixed(1)} dBm`;
 		// // const suffix = `${wifiInterfaceData?.[0]?.get('Name')}`;
 		// progress.update(signalQuality, {
-		// 	barSymbolComplete: qualityLevel.signal,
-		// 	barSymbolIncomplete: qualityLevel.background,
+		// 	progressBarSymbolComplete: qualityLevel.signal,
+		// 	progressBarSymbolIncomplete: qualityLevel.background,
 		// 	progressTemplate: `${prefix} * {percent}% * {bar} *`,
 		// });
 		const nameLengthMax = signalData.reduce((max, e) => {
@@ -385,8 +385,8 @@ const fetchFn = async function (myID = fetchIntervalID) {
 					(e.interfaceData?.get('Name') ?? '<unknown>').padEnd(nameLengthMax)
 				} @ ${dBm.toFixed(1).padStart(5)} dBm`;
 				return [signalQuality, {
-					barSymbolComplete: qualityLevel.signal,
-					barSymbolIncomplete: qualityLevel.background,
+					progressBarSymbolComplete: qualityLevel.signal,
+					progressBarSymbolIncomplete: qualityLevel.background,
 					progressTemplate: `${prefix} * {percent}% * {bar} *`,
 				}] as [number, UpdateOptions];
 			})

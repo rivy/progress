@@ -28,7 +28,7 @@ function run() {
 	if (completed <= goal) {
 		progress.update(completed++, {
 			// ==> here
-			barSymbolComplete: bgRgb24(' ', colorShift(red, green, completed / goal)),
+			progressBarSymbolComplete: bgRgb24(' ', colorShift(red, green, completed / goal)),
 			// <== here
 		});
 

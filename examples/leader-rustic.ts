@@ -5,14 +5,14 @@ const goal = 1000;
 
 const progress = new Progress({
 	goal,
-	minRenderInterval: 10,
+	minUpdateInterval: 10,
 	// progressBarWidthMax: 100,
 	// Note: on Windows, if UTF-8 is not the default encoding for the terminal, such characters will not be displayed as expected.
 	progressTemplate: '{percent}% [{bar}|{value}/{goal}] ({elapsed}s)',
 	// ==> here
-	barSymbolComplete: '=',
-	barSymbolIncomplete: ' ',
-	barSymbolLeader: '>',
+	progressBarSymbolComplete: '=',
+	progressBarSymbolIncomplete: ' ',
+	progressBarSymbolLeader: '>',
 	// <== here
 });
 

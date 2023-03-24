@@ -12,9 +12,9 @@ const bars = new Progress({
 	// dynamicUpdateHeight: true,
 	progressBarSymbolComplete: '=',
 	progressBarSymbolIncomplete: '-',
-	// progressBarWidthMax: 100,
+	progressBarWidthMax: 100,
 	completeTemplate: '',
-	progressTemplate: '[{bar}] {label} {percent}% (in {elapsed}s) {value}/{goal}',
+	progressTemplate: '🚀 * [{bar}] {label} {percent}% (in {elapsed}s) {value}/{goal}',
 	hideCursor: true,
 });
 

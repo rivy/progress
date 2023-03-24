@@ -7,8 +7,8 @@ const progress = new Progress({
 	label,
 	goal,
 	// ==> here
-	barSymbolComplete: '=',
-	barSymbolIncomplete: '-',
+	progressBarSymbolComplete: '=',
+	progressBarSymbolIncomplete: '-',
 	// <== here
 	completeTemplate: '{percent}% {label}',
 });

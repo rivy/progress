@@ -137,7 +137,7 @@ const progress = new Progress({
 	label: `Fetching...`,
 	progressTemplate:
 		`Fetching file... * {percent}% * {bar} {value}/${asUnits} ({elapsed}s; {rate}${unit}/s; eta {eta}s) :: ${url}`,
-	minRenderInterval: 100,
+	minUpdateInterval: 100,
 	progressBarWidthMin: 20,
 });
 
