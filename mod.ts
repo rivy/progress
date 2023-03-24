@@ -32,11 +32,14 @@ import { cliTruncate, stringWidth } from './deps.ts';
 
 import { consoleSize } from './src/lib/consoleSize.ts';
 
+// ToDO: [2023-03; rivy] add partial line functionality for single line progress displays, moving only back and forth along the current line
+//  #... * allows for in-line spinners or a simple progress percentage meter
+
 // ToDO: [2023-03; rivy] implement STDIN discarding (see https://www.npmjs.com/package/stdin-discarder; use `Deno.stdin.setRaw()`, ...)
 //  #... * note: `Deno.stdin.setRaw(false)` will need Deno version >= v1.31.2 for correct restoration of STDIN input handling (see GH:denoland/deno#17866 with fix GH:denoland/deno#17983)
 //  #... just using an input loop can discard all but CTRL-BREAK which would require a signal hook (example `wifi-winos-netsh-wlan-show-interfaces.ts` contains an implementation)
 
-// FixME: [2023-03; rivy] investigate relationship between update interval calls and minRenderInterval ; some updates can result in `completed` with a value slightly less than `goal`
+// FixME: [2023-03; rivy] investigate relationship between update interval calls and minUpdateInterval ; some updates can result in `completed` with a value slightly less than `goal`
 //    ... *early-complete-bug-example.ts* can show this
 
 //===
@@ -89,7 +92,7 @@ export interface RenderConfigOptions {
 	dynamicCompleteHeight?: boolean;
 	dynamicUpdateHeight?: boolean;
 	hideCursor?: boolean;
-	minRenderInterval?: number;
+	minUpdateInterval?: number;
 	title?: string | string[];
 	ttyColumns?: number;
 	writer?: Deno.WriterSync & { rid: number };
@@ -97,15 +100,15 @@ export interface RenderConfigOptions {
 
 export interface UpdateOptions {
 	autoComplete?: boolean;
-	barSymbolComplete?: string;
-	barSymbolIncomplete?: string;
-	barSymbolIntermediate?: string[];
-	barSymbolLeader?: string;
 	clearOnComplete?: boolean;
 	completeTemplate?: string | null;
 	goal?: number;
 	isComplete?: boolean;
 	label?: string;
+	progressBarSymbolComplete?: string;
+	progressBarSymbolIncomplete?: string;
+	progressBarSymbolIntermediate?: string[];
+	progressBarSymbolLeader?: string;
 	progressBarWidthMax?: number;
 	progressBarWidthMin?: number;
 	progressTemplate?: string;
@@ -198,15 +201,15 @@ export default class Progress {
 	private encoder = new TextEncoder();
 
 	/**
-	 * Goal, label, barSymbolComplete, barSymbolIncomplete, and barSymbolIntermediate also be changed dynamically in the update method
+	 * Goal, label, progressBarSymbolComplete, progressBarSymbolIncomplete, and progressBarSymbolIntermediate also be changed dynamically in the update method
 	 *
 	 * @param goal  total number of ticks to complete, default: 100
 	 * @param label  progress line label text, default: ''
-	 * @param barSymbolComplete  completion symbol, default: colors.bgGreen(' ')
-	 * @param barSymbolIncomplete  incomplete symbol, default: colors.bgWhite(' ')
-	 * @param barSymbolIntermediate  incomplete symbol, default: colors.bgWhite(' ')
-	 * @param barSymbolLeader  bar leader symbol, default: ''
 	 * @param completeTemplate  progress display line content for completion, default: undefined
+	 * @param progressBarSymbolComplete  completion symbol, default: colors.bgGreen(' ')
+	 * @param progressBarSymbolIncomplete  incomplete symbol, default: colors.bgWhite(' ')
+	 * @param progressBarSymbolIntermediate  incomplete symbol, default: colors.bgWhite(' ')
+	 * @param progressBarSymbolLeader  leader symbol, default: ''
 	 * @param progressBarWidthMax  the maximum displayed width of the progress bar, default: 50 characters
 	 * @param progressBarWidthMin  the minimum displayed width of the progress bar, default: 10 characters
 	 * @param progressTemplate  progress display line content, default: '{label} {percent}% {bar} ({elapsed}s) {value}/{goal}'
@@ -215,19 +218,19 @@ export default class Progress {
 	 * @param displayAlways  avoid TTY check on writer and always display progress, default: false
 	 * @param hideCursor  hide cursor until progress line display is complete, default: false
 	 * @param title  progress title line (static), default: undefined
-	 * @param minRenderInterval  minimum time between updates in milliseconds, default: 20 ms
+	 * @param minUpdateInterval  minimum time between updates in milliseconds, default: 20 ms
 	 */
 	constructor({
 		autoComplete = true,
-		barSymbolComplete = bgGreen(' '),
-		barSymbolIncomplete = bgWhite(' '),
-		barSymbolIntermediate = [],
-		barSymbolLeader = '',
 		clearOnComplete = false,
 		completeTemplate = null,
 		goal = 100,
 		isComplete = false,
 		label = '',
+		progressBarSymbolComplete = bgGreen(' '),
+		progressBarSymbolIncomplete = bgWhite(' '),
+		progressBarSymbolIntermediate = [],
+		progressBarSymbolLeader = '',
 		progressBarWidthMax = 50, // characters
 		progressBarWidthMin = 10, // characters
 		progressTemplate = '{label} {percent}% {bar} ({elapsed}s) {value}/{goal}',
@@ -238,22 +241,22 @@ export default class Progress {
 		dynamicCompleteHeight = false,
 		dynamicUpdateHeight = false,
 		hideCursor = false,
-		minRenderInterval = 20, // ms
+		minUpdateInterval = 20, // ms
 		title = [],
 		ttyColumns = ttySize?.columns ?? 80,
 		writer = Deno.stderr,
 	}: ProgressConstructionOptions = {}) {
 		this.defaultUpdateSettings = {
 			autoComplete,
-			barSymbolComplete,
-			barSymbolIntermediate, /* : barSymbolIntermediate.concat(barSymbolComplete) */
-			barSymbolIncomplete,
-			barSymbolLeader,
 			clearOnComplete,
 			completeTemplate,
 			goal,
 			isComplete,
 			label,
+			progressBarSymbolComplete,
+			progressBarSymbolIntermediate, /* : progressBarSymbolIntermediate.concat(progressBarSymbolComplete) */
+			progressBarSymbolIncomplete,
+			progressBarSymbolLeader,
 			progressBarWidthMax,
 			progressBarWidthMin,
 			progressTemplate,
@@ -267,7 +270,7 @@ export default class Progress {
 			dynamicUpdateHeight,
 			hideCursor,
 			ttyColumns,
-			minRenderInterval,
+			minUpdateInterval,
 			title,
 			writer,
 		};
@@ -289,9 +292,9 @@ export default class Progress {
 	// #init(options: constructorOptions) {
 	// 	this.goal = options.goal;
 	// 	this.label = options.label;
-	// 	this.barSymbolComplete = options.barSymbolComplete;
-	// 	this.barSymbolIntermediate = options.barSymbolIntermediate.concat(options.barSymbolComplete);
-	// 	this.barSymbolIncomplete = options.barSymbolIncomplete;
+	// 	this.progressBarSymbolComplete = options.progressBarSymbolComplete;
+	// 	this.progressBarSymbolIntermediate = options.progressBarSymbolIntermediate.concat(options.progressBarSymbolComplete);
+	// 	this.progressBarSymbolIncomplete = options.progressBarSymbolIncomplete;
 	// 	this.completeTemplate = options.completeTemplate;
 	// 	this.progressBarWidthMax = options.progressBarWidthMax;
 	// 	this.progressBarWidthMin = options.progressBarWidthMin;
@@ -299,7 +302,7 @@ export default class Progress {
 	// 	this.autoComplete = options.autoComplete;
 	// 	this.clearAllOnComplete = options.clearAllOnComplete;
 	// 	this.hideCursor = options.hideCursor;
-	// 	this.minRenderInterval = options.minRenderInterval;
+	// 	this.minUpdateInterval = options.minUpdateInterval;
 	// 	this.title = options.title;
 	// 	this.writer = options.writer;
 	// 	this.isTTY = Deno.isatty(writer.rid);
@@ -339,7 +342,7 @@ export default class Progress {
 
 		const now = Date.now();
 		const msUpdateInterval = now - this.priorRenderTime;
-		if (!forceRender && (msUpdateInterval < this.renderSettings.minRenderInterval)) return;
+		if (!forceRender && (msUpdateInterval < this.renderSettings.minUpdateInterval)) return;
 
 		this.priorRenderTime = now;
 
@@ -418,6 +421,9 @@ export default class Progress {
 		);
 		if (allComplete && this.renderSettings.autoCompleteOnAllComplete) this.complete();
 	}
+
+	// * refresh() ~ re-renders() and re-displays progress display block
+	// * display()
 
 	#renderLine(v: number, options: Required<UpdateOptions>) {
 		// if ((isNaN(v)) || (v < 0)) {
@@ -518,7 +524,7 @@ export default class Progress {
 				options.progressBarWidthMin,
 			);
 
-			const partialSubGauge = options.barSymbolIntermediate;
+			const partialSubGauge = options.progressBarSymbolIntermediate;
 			const isPrecise = partialSubGauge.length > 1;
 
 			// ToDO: [2023-03; rivy] deal correctly with unicode character variable widths
@@ -533,7 +539,7 @@ export default class Progress {
 					? ''
 					: partialSubGauge[Math.floor(partialSubGauge.length * partialLength)];
 			}
-			const leader = completed ? '' : options.barSymbolLeader;
+			const leader = completed ? '' : options.progressBarSymbolLeader;
 
 			const incompleteWidth = width - wholeCompleteWidth - stringWidth(intermediary) -
 				stringWidth(leader);
@@ -541,9 +547,11 @@ export default class Progress {
 			// console.warn({ width, completeWidth, wholeCompleteWidth, incompleteWidth });
 
 			// ToDO: [2023-03; rivy] enforce symbols as single graphemes (ignoring ANSI escapes)
-			const complete = new Array(wholeCompleteWidth).fill(options.barSymbolComplete).join('');
+			const complete = new Array(wholeCompleteWidth).fill(options.progressBarSymbolComplete).join(
+				'',
+			);
 			const incomplete = new Array(Math.max(incompleteWidth, 0))
-				.fill(options.barSymbolIncomplete)
+				.fill(options.progressBarSymbolIncomplete)
 				.join('');
 
 			updateText = updateText.replace('{bar}', complete + intermediary + leader + incomplete);
