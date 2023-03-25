@@ -1,7 +1,13 @@
+import * as $colors from 'https://deno.land/std@0.126.0/fmt/colors.ts';
+
 import Progress from '../mod.ts';
 
 const title = 'Downloading files...';
 const total = 100;
+
+function logProgressInfo(progress: Progress, message: string) {
+	progress.log($colors.brightWhite($colors.bgCyan(' i ')) + ' ' + message);
+}
 
 const bars = new Progress({
 	// autoCompleteOnAllComplete: false,
@@ -14,7 +20,9 @@ const bars = new Progress({
 	progressBarSymbolIncomplete: '-',
 	progressBarWidthMax: 100,
 	completeTemplate: '',
-	progressTemplate: '🚀 * [{bar}] {label} {percent}% (in {elapsed}s) {value}/{goal}',
+	progressTemplate: `🚀 ${$colors.red('*')} [${$colors.green('{bar}')}] {label} {percent}% (in ${
+		$colors.yellow('{elapsed}s')
+	}) {value}/{goal}`,
 	hideCursor: true,
 });
 
@@ -47,18 +55,18 @@ function downloading() {
 			[completed3, { label: 'file3' /* completeTemplate: '*DONE*: {label}' */ }],
 		]);
 		if ((completed3 <= total) && (completed3 % 50 == 0)) {
-			bars.log(`file3: completed ${completed3} of ${total}`);
+			logProgressInfo(bars, `file3: completed ${completed3} of ${total}`);
 		}
 		if (completed1 >= 100 && !displayedDone1) {
-			bars.log('file1: DONE');
+			logProgressInfo(bars, 'file1: DONE');
 			displayedDone1 = true;
 		}
 		if (completed2 >= 100 && !displayedDone2) {
-			bars.log('file2: DONE');
+			logProgressInfo(bars, 'file2: DONE');
 			displayedDone2 = true;
 		}
 		if (completed3 >= 100 && !displayedDone3) {
-			bars.log('file3: DONE');
+			logProgressInfo(bars, 'file3: DONE');
 			displayedDone3 = true;
 		}
 

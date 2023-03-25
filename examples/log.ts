@@ -28,7 +28,11 @@ function downloading() {
 		// here ==>
 		if (completed % 20 === 0) {
 			// progress.log(`${sprintf('%3s%% complete', asInteger.format(completed))}`);
-			progress.log($colors.cyan(`info: ${completed.toString().padStart(3, ' ')}% complete`));
+			progress.log(
+				$colors.cyan(
+					`info: ${$colors.yellow(completed.toString().padStart(3, ' ') + '%')} complete`,
+				),
+			);
 		}
 		// <== here
 		// const complete = completed >= goal;

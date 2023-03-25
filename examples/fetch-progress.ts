@@ -12,6 +12,10 @@
 import * as $colors from 'https://deno.land/std@0.126.0/fmt/colors.ts';
 import * as $path from 'https://deno.land/std@0.149.0/path/mod.ts';
 
+// import { fetch } from 'https://cdn.jsdelvr.net/gh/rivy/deno.dxx@b964ffafb062c2d8/src/lib/xFetch.ts';
+import { validURL } from '../../../../../dxx/repo.GH/src/lib/$shared.ts';
+import { fetch } from '../../../../../dxx/repo.GH/src/lib/xFetch.ts';
+
 // import $chance from 'npm:chance@1.1.11'; // for Deno v1.28.0+
 import 'https://cdn.jsdelivr.net/gh/DefinitelyTyped/DefinitelyTyped@b70b8e239fc881b2/types/chance/index.d.ts';
 type ChanceT = Chance.ChanceStatic;
@@ -25,7 +29,9 @@ const $chance = { Chance: ChanceM as ChanceT }; // esm.sh typing
 
 import Progress from '../mod.ts';
 
-const randomSeed = Date.now();
+const randomSeedPreset: number | undefined = undefined /* 1234567890 */;
+const randomSeed = randomSeedPreset ?? (Math.random() * Math.pow(2, 32));
+// console.warn({ randomSeed });
 const chance = new $chance.Chance(randomSeed);
 function randomPick<T>(array: T[]) {
 	const n = chance.integer({ min: 0, max: array.length - 1 });
@@ -55,7 +61,6 @@ import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.t
 
 const urls = [
 	// ToDO: [2023-03; rivy] add support for files and file URLs
-	// 'file://nas-3/vault/#local/TIKI-1+Roy.Downloads/nikcollection-full-1.2.11.exe', // spell-checker:ignore (names) NikCollection
 	// from <https://github.com/denoland/deno/releases>
 	'https://github.com/denoland/deno/releases/download/v1.31.3/deno-aarch64-apple-darwin.zip',
 	'https://github.com/denoland/deno/releases/download/v1.31.3/deno-x86_64-apple-darwin.zip',
@@ -71,7 +76,7 @@ const urls = [
 /** Coefficient of number in engineering or scientific notation (as string to maintain precision)
  */
 function coefficient(n: string) {
-	return n.replace(/[Ee]\d+$/, '');
+	return Number(n.replace(/[Ee]\d+$/, ''));
 }
 function scientificExponentOf(n: number) {
 	return Math.floor(Math.log10(n));
@@ -116,8 +121,13 @@ function toUnitsFromEng(n: string) {
 	return `${base} ${conversions.get(`${exp}`.toLocaleLowerCase()) ?? ''}`.trimEnd();
 }
 
-const url = randomPick(urls);
-const filename = $path.basename(url);
+const pick = Deno.args.length > 0 ? Deno.args[0] : randomPick(urls);
+const url = validURL(pick);
+if (url == null) {
+	console.warn(`ERR!: '${pick}' is not a valid URL.`);
+	Deno.exit(1);
+}
+const filename = $path.basename(url.href);
 
 const response = await fetch(url);
 const total = Number(response.headers.get('content-length'));
@@ -127,12 +137,12 @@ const engTotal = toEngineeringNotation(total);
 const coefEngTotal = coefficient(engTotal); // coefficient of number // spell-checker:ignore (vars) coef
 const unit = unitFromEng(engTotal);
 const asUnits = toUnitsFromEng(engTotal);
-// console.warn({ total, engScale, scaledTotal, bareScaledTotal, unit, asUnits });
+// console.warn({ response, total, engineeringOOM, engTotal, coefEngTotal, unit, asUnits });
 
 // Deno.exit(0);
 
 const progress = new Progress({
-	goal: Number(coefEngTotal),
+	goal: coefEngTotal,
 	hideCursor: true,
 	label: `Fetching...`,
 	progressTemplate:
@@ -166,7 +176,7 @@ while (true) {
 	}
 	if (result?.done) {
 		progress.log($colors.cyan(`info: Fetch complete ('${filename}')`));
-		progress.update(total, { forceRender: true, tokenOverrides: [['value', coefEngTotal]] });
+		progress.update(total, { forceRender: true, tokenOverrides: [['value', `${coefEngTotal}`]] });
 		// progress.complete();
 		break;
 	}
