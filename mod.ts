@@ -46,6 +46,11 @@ import { consoleSize } from './src/lib/consoleSize.ts';
 
 const isWinOS = Deno.build.os === 'windows';
 
+/** A regular expression pattern, in string form, meant to be fed to `RegExp(...)`.
+-   *branded* to mimic a nominal type (and for better Intellisense handling).
+*/
+type RegExpPattern = string & { '#brand': 'RegExpPattern' };
+
 const LF = '\n';
 
 // spell-checker:ignore (WinOS) CONOUT
@@ -156,21 +161,21 @@ function isTTY(rid: number) {
 	}
 }
 
-const EOLReS = '\r?\n|\r';
-const EOLRx = new RegExp(`${EOLReS}`, 'ms');
-const terminalEOLRx = new RegExp(`(${EOLReS})$`, 'ms');
+const EOLRxp = '\r?\n|\r' as RegExpPattern;
+const EOLRx = new RegExp(EOLRxp, 'ms');
+const terminalEOLRx = new RegExp(`(${EOLRxp})$`, 'ms');
 function splitIntoLines(s: string) {
 	// all returned "lines" are non-empty or were terminated with a trailing EOL
 	// * remove any terminal EOL to avoid a last phantom line
 	return s.replace(terminalEOLRx, '').split(EOLRx);
 }
 
+// ref: https://unix.stackexchange.com/questions/60641/linux-difference-between-dev-console-dev-tty-and-dev-tty0
 const consoleOutputFile = isWinOS ? 'CONOUT$' : '/dev/tty';
 
+// hook application cleanup code to 'unload' event
 ['unload'].forEach((eventType) =>
 	addEventListener(eventType, (_: Event) => {
-		// ref: https://unix.stackexchange.com/questions/60641/linux-difference-between-dev-console-dev-tty-and-dev-tty0
-		// const consoleFileName = isWinOS ? 'CONOUT$' : '/dev/tty';
 		const file = denoOpenSyncNT(consoleOutputFile, { read: true, write: true });
 		if (file != null) {
 			writeAllSync(file, (new TextEncoder()).encode(ansiCSI.showCursor));
