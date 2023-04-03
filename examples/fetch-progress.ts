@@ -151,11 +151,13 @@ const progress = new Progress({
 	progressBarWidthMin: 20,
 });
 
+console.warn({ response });
 const reader = response.body?.getReader();
 let bytesReceived: number | null = 0;
 while (true) {
 	const result = await reader?.read();
 	const received = result?.value?.length;
+	console.warn({ result, received });
 	if (received != null) {
 		bytesReceived += received;
 		// console.log(`Received ${bytesReceived} bytes (of ${total} data)'`);
@@ -172,6 +174,7 @@ while (true) {
 		const value = f
 			.format((Math.round(bytesReceived / (10 ** engineeringOOM) * 1000) + Number.EPSILON) / 1000)
 			.slice(0, 5);
+		console.warn({ bytesReceived, received, result, reader });
 		progress.update(Number(value), { tokenOverrides: [['value', value]] });
 	}
 	if (result?.done) {

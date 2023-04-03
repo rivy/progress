@@ -579,20 +579,22 @@ export default class Progress {
 			const incompleteWidth = width - alignedCompleteWidth - stringWidth(intermediary) -
 				stringWidth(leader);
 
-			// console.warn({
-			// 	// partialSubGauge,
-			// 	// pSGLength: partialSubGauge.length,
-			// 	// isPrecise,
-			// 	// completed,
-			// 	width,
-			// 	completeWidth,
-			// 	fullyCompleteWidth,
-			// 	alignedCompleteWidth,
-			// 	partialPercentage,
-			// 	subBarElementN,
-			// 	intermediary,
-			// 	incompleteWidth,
-			// });
+			console.warn({
+				// partialSubGauge,
+				// pSGLength: partialSubGauge.length,
+				// isPrecise,
+				// completed,
+				v,
+				goal,
+				width,
+				completeWidth,
+				fullyCompleteWidth,
+				alignedCompleteWidth,
+				partialPercentage,
+				subBarElementN,
+				intermediary,
+				incompleteWidth,
+			});
 
 			// ! ToDO?: [2023-03; rivy] enforce symbols as single graphemes (ignoring ANSI escapes)
 			// #... maybe just suggest in docs that all symbols be of the same length
