@@ -557,7 +557,7 @@ export default class Progress {
 
 			// DONE/ToDO: [2023-03; rivy] deal correctly with unicode character variable widths
 			// :bar
-			const completeWidth = width * (v / goal);
+			const completeWidth = width * ((goal > 0) ? v / goal : 1); // default to full width if goal is 0 (aka, unknown)
 			const fullyCompleteWidth = Math.floor(completeWidth);
 			const alignedCompleteWidth = fullyCompleteWidth -
 				(fullyCompleteWidth % this.#progressBarSymbolWidth);
