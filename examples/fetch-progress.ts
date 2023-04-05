@@ -79,7 +79,7 @@ function coefficient(n: string) {
 	return Number(n.replace(/[Ee]\d+$/, ''));
 }
 function scientificExponentOf(n: number) {
-	return Math.floor(Math.log10(n));
+	return (n != 0) ? Math.floor(Math.log10(n)) : 0;
 }
 function engineeringExponentOf(n: number) {
 	return Math.floor(scientificExponentOf(n) / 3) * 3;
@@ -130,14 +130,14 @@ if (url == null) {
 const filename = $path.basename(url.href);
 
 const response = await fetch(url);
-const total = Number(response.headers.get('content-length'));
+const total = Number(response.headers.get('content-length') ?? 0);
 
 const engineeringOOM = engineeringExponentOf(total); // engineering order-of-magnitude
 const engTotal = toEngineeringNotation(total);
 const coefEngTotal = coefficient(engTotal); // coefficient of number // spell-checker:ignore (vars) coef
 const unit = unitFromEng(engTotal);
 const asUnits = toUnitsFromEng(engTotal);
-// console.warn({ response, total, engineeringOOM, engTotal, coefEngTotal, unit, asUnits });
+console.warn({ response, total, engineeringOOM, engTotal, coefEngTotal, unit, asUnits });
 
 // Deno.exit(0);
 
@@ -145,20 +145,22 @@ const progress = new Progress({
 	goal: coefEngTotal,
 	hideCursor: true,
 	label: `Fetching...`,
-	progressTemplate:
-		`Fetching file... * {percent}% * {bar} {value}/${asUnits} ({elapsed}s; {rate}${unit}/s; eta {eta}s) :: ${url}`,
+	progressTemplate: total > 0
+		? `Fetching file... * {percent}% * {bar} {value}/${asUnits} ({elapsed}s; {rate}${unit}/s; eta {eta}s) :: ${url}`
+		: `Fetching file... * {value} ({elapsed}s; {rate}/s) :: ${url}`,
 	minUpdateInterval: 100,
 	progressBarWidthMin: 20,
 });
 
 const reader = response.body?.getReader();
+console.warn({ reader });
 let bytesReceived: number | null = 0;
 while (true) {
 	const result = await reader?.read();
 	const received = result?.value?.length;
 	if (received != null) {
 		bytesReceived += received;
-		// console.log(`Received ${bytesReceived} bytes (of ${total} data)'`);
+		// console.warn(`Received ${bytesReceived} bytes (of ${total} data)'`);
 		// const value = f
 		// 	// .format(bytesReceived / (10 ** engScale))
 		// 	.format((Math.round(bytesReceived / (10 ** engScale) * 1000) + Number.EPSILON) / 1000)
@@ -169,10 +171,13 @@ while (true) {
 			maximumSignificantDigits: 4,
 			maximumFractionDigits: 3,
 		});
+		const valueOOM = engineeringOOM > 0 ? engineeringOOM : engineeringExponentOf(bytesReceived);
+		// const units = ...
 		const value = f
-			.format((Math.round(bytesReceived / (10 ** engineeringOOM) * 1000) + Number.EPSILON) / 1000)
+			.format((Math.round(bytesReceived / (10 ** valueOOM) * 1000) + Number.EPSILON) / 1000)
 			.slice(0, 5);
-		progress.update(Number(value), { tokenOverrides: [['value', value]] });
+		// console.warn({ value });
+		progress.update(Number(value), { goal: bytesReceived, tokenOverrides: [['value', value]] });
 	}
 	if (result?.done) {
 		progress.log($colors.cyan(`info: Fetch complete ('${filename}')`));
