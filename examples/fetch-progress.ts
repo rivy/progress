@@ -60,6 +60,8 @@ import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.t
 );
 
 const urls = [
+	// FixME: add `insecure` option to `fetch` to allow self-signed certificates
+	// FixME: `deno run -A examples\fetch-progress.ts "sftp://USER@HOST:PORT/share/"` outputs incorrect completion text (for WinOS; ok for POSIX), overwriting the last line
 	// ToDO: [2023-03; rivy] add support for files and file URLs
 	// from <https://github.com/denoland/deno/releases>
 	'https://github.com/denoland/deno/releases/download/v1.31.3/deno-aarch64-apple-darwin.zip',
@@ -137,7 +139,7 @@ const engTotal = toEngineeringNotation(total);
 const coefEngTotal = coefficient(engTotal); // coefficient of number // spell-checker:ignore (vars) coef
 const unit = unitFromEng(engTotal);
 const asUnits = toUnitsFromEng(engTotal);
-console.warn({ response, total, engineeringOOM, engTotal, coefEngTotal, unit, asUnits });
+// console.warn({ response, total, engineeringOOM, engTotal, coefEngTotal, unit, asUnits });
 
 // Deno.exit(0);
 
@@ -152,14 +154,17 @@ const progress = new Progress({
 	progressBarWidthMin: 20,
 });
 
+const decoder = new TextDecoder();
+let out = '';
 const reader = response.body?.getReader();
-console.warn({ reader });
-let bytesReceived: number | null = 0;
+// console.warn({ reader });
+let bytesReceived = 0;
 while (true) {
 	const result = await reader?.read();
-	const received = result?.value?.length;
-	if (received != null) {
-		bytesReceived += received;
+	const bytesRead = result?.value?.length;
+	if (bytesRead != null) {
+		bytesReceived += bytesRead;
+		out += decoder.decode(result?.value);
 		// console.warn(`Received ${bytesReceived} bytes (of ${total} data)'`);
 		// const value = f
 		// 	// .format(bytesReceived / (10 ** engScale))
@@ -179,10 +184,13 @@ while (true) {
 		// console.warn({ value });
 		progress.update(Number(value), { goal: bytesReceived, tokenOverrides: [['value', value]] });
 	}
-	if (result?.done) {
+	if ((result == null) || (result.done)) {
 		progress.log($colors.cyan(`info: Fetch complete ('${filename}')`));
 		progress.update(total, { forceRender: true, tokenOverrides: [['value', `${coefEngTotal}`]] });
 		// progress.complete();
 		break;
 	}
 }
+// if (out.length > 0) {
+// 	console.log({ output: out });
+// }
