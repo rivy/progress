@@ -364,6 +364,9 @@ export default class Progress {
 	): void {
 		type PriorLine = typeof this.priorLines[number];
 
+		console.warn('update', updates_, options_, render_);
+		console.warn('update', { isCompleted: this.isCompleted });
+
 		if (this.isCompleted || !this.display) return;
 		const forceRender = render_?.forceRender ?? options_?.forceRender ?? false;
 
@@ -386,7 +389,7 @@ export default class Progress {
 					: null
 			);
 		}
-		// console.warn({ updates });
+		console.warn({ updates });
 
 		const updatedLines: (PriorLine | null)[] = [];
 
@@ -622,6 +625,7 @@ export default class Progress {
 	 * * no need to call unless you want completion to occur before all goals are obtained
 	 */
 	complete(cursorRest: CursorPosition = 'afterBlock'): void {
+		console.warn('complete');
 		// ToDO: [2023-03; rivy] add support for all cursorRest positions
 		if (this.isCompleted) return;
 		const dynamicHeight = this.renderSettings.dynamicCompleteHeight;
