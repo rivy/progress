@@ -116,7 +116,8 @@ export interface UpdateOptions {
 	autoComplete?: boolean;
 	clearOnComplete?: boolean;
 	completeTemplate?: string | null;
-	goal?: number;
+	goal?: number | null;
+	/** force completion of display line */
 	isComplete?: boolean;
 	label?: string;
 	progressBarSymbolComplete?: string;
@@ -191,7 +192,7 @@ type CursorPosition =
 	| 'lastLineStart' // @ first character of last block line
 	| 'blockStart' // @ first character of first block line
 	| 'blockEnd' // @ *first character past* final character of last block line
-	| 'afterBlock' // start of line after block
+	| 'afterBlock' // @ start of first line after block
 ;
 // class Progress
 export default class Progress {
@@ -364,11 +365,13 @@ export default class Progress {
 	): void {
 		type PriorLine = typeof this.priorLines[number];
 
-		console.warn('update', updates_, options_, render_);
-		console.warn('update', { isCompleted: this.isCompleted });
-
-		if (this.isCompleted || !this.display) return;
 		const forceRender = render_?.forceRender ?? options_?.forceRender ?? false;
+
+		// console.warn('update', { updates_, options_, render_ });
+		// console.warn('update', { isCompleted: this.isCompleted, display: this.display });
+		// console.warn('update', { forceRender });
+
+		if ((this.isCompleted || !this.display) && !forceRender) return;
 
 		const now = Date.now();
 		const msUpdateInterval = now - this.priorRenderTime;
@@ -389,7 +392,7 @@ export default class Progress {
 					: null
 			);
 		}
-		console.warn({ updates });
+		// console.warn({ updates });
 
 		const updatedLines: (PriorLine | null)[] = [];
 
@@ -466,10 +469,12 @@ export default class Progress {
 
 		const goal = options.goal;
 
-		if ((isNaN(v)) || (v < 0)) v = 0;
-		if (v > goal) v = goal;
+		// console.warn('#renderLine()', { v, goal });
 
-		const completed = options.autoComplete && (v >= goal);
+		if ((isNaN(v)) || (v < 0)) v = 0;
+		if ((goal != null) && (v > goal)) v = goal;
+
+		const completed = options.isComplete || (options.autoComplete && (goal != null) && (v >= goal));
 
 		const elapsed = sprintf(
 			'%s', /* in seconds */
@@ -481,25 +486,29 @@ export default class Progress {
 				.format(age / 1000),
 		);
 
-		const eta = sprintf(
-			'%s', /* in seconds */
-			new Intl.NumberFormat(undefined, {
-				minimumIntegerDigits: 1,
-				minimumFractionDigits: 1,
-				maximumFractionDigits: 1,
-			})
-				.format((goal - v) / (v / (age / 1000))),
-		);
+		const eta = (goal == null)
+			? 'NaN'
+			: sprintf(
+				'%s', /* in seconds */
+				new Intl.NumberFormat(undefined, {
+					minimumIntegerDigits: 1,
+					minimumFractionDigits: 1,
+					maximumFractionDigits: 1,
+				})
+					.format((goal - v) / (v / (age / 1000))),
+			);
 
-		const percent = sprintf(
-			'%3s',
-			new Intl.NumberFormat(undefined, {
-				minimumIntegerDigits: 1,
-				minimumFractionDigits: 0,
-				maximumFractionDigits: 0,
-			})
-				.format((v / goal) * 100),
-		);
+		const percent = (goal == null)
+			? 'NaN'
+			: sprintf(
+				'%3s',
+				new Intl.NumberFormat(undefined, {
+					minimumIntegerDigits: 1,
+					minimumFractionDigits: 0,
+					maximumFractionDigits: 0,
+				})
+					.format((v / (goal ?? 0)) * 100),
+			);
 
 		const rate = sprintf(
 			'%s', /* per second */
@@ -560,7 +569,7 @@ export default class Progress {
 
 			// DONE/ToDO: [2023-03; rivy] deal correctly with unicode character variable widths
 			// :bar
-			const completeWidth = width * ((goal > 0) ? v / goal : 1); // default to full width if goal is 0 (aka, unknown)
+			const completeWidth = width * (((goal ?? 0) > 0) ? v / (goal ?? 0) : 1); // default to full width if goal is 0 (aka, unknown)
 			const fullyCompleteWidth = Math.floor(completeWidth);
 			const alignedCompleteWidth = fullyCompleteWidth -
 				(fullyCompleteWidth % this.#progressBarSymbolWidth);
@@ -625,7 +634,8 @@ export default class Progress {
 	 * * no need to call unless you want completion to occur before all goals are obtained
 	 */
 	complete(cursorRest: CursorPosition = 'afterBlock'): void {
-		console.warn('complete');
+		// console.warn('complete', { cursorRest, isCompleted: this.isCompleted });
+		// this.log(`complete { cursorRest: ${cursorRest}, isCompleted: ${this.isCompleted} }`);
 		// ToDO: [2023-03; rivy] add support for all cursorRest positions
 		if (this.isCompleted) return;
 		const dynamicHeight = this.renderSettings.dynamicCompleteHeight;
@@ -667,10 +677,28 @@ export default class Progress {
 			}
 		}
 		// if (!isWinOS) {
-		if (cursorRest == 'afterBlock') {
-			this.#cursorToNextLine();
-			this.#cursorToLineStart();
-			this.#cursorPosition = 'afterBlock';
+		// if (cursorRest == 'afterBlock') {
+		// 	this.#cursorToNextLine();
+		// 	this.#cursorToLineStart();
+		// 	this.#cursorPosition = 'afterBlock';
+		// }
+		switch (cursorRest) {
+			case 'afterBlock': {
+				this.#cursorToNextLine();
+				this.#cursorToLineStart();
+				this.#cursorPosition = 'afterBlock';
+				break;
+			}
+			case 'blockEnd': {
+				this.#cursorPosition = 'blockEnd';
+				break;
+			}
+			// case 'blockStart': {}
+			case 'lastLineStart': {
+				this.#cursorToLineStart();
+				this.#cursorPosition = 'lastLineStart';
+				break;
+			}
 		}
 		this.#showCursor();
 		this.isCompleted = true;
