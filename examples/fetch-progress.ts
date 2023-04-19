@@ -53,9 +53,13 @@ import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.t
 ['unload'].forEach((eventType) =>
 	addEventListener(eventType, (_: Event) => {
 		// ToDO: [2023-03; rivy] evaluate this for potential problems and conversion to a module of some kind
-		const encoder = new TextEncoder();
-		const msg = ansiCSI.cursorUp.replace('{n}', '1');
-		if (isWinOS) writeAllSync(Deno.stdout, encoder.encode(msg));
+		// NOTE: WinOS CMD shell adds newline to console output prior to the prompt display
+		//   ... notably PowerShell does *not*, and there is no easy way to differentiate between CMD and PowerShell as parent processes
+		// * if desired, match WinOS (CMD shell) to POSIX appearance (by moving the cursor up one line prior to exit)
+		// * alternatively, PROMPT can be used similar effect with the minor quibble of the prompt never being displayed on the last line of the console (for single line prompts)
+		// const encoder = new TextEncoder();
+		// const msg = ansiCSI.cursorUp.replace('{n}', '1');
+		// if (isWinOS) writeAllSync(Deno.stdout, encoder.encode(msg));
 	})
 );
 
