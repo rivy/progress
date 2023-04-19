@@ -196,7 +196,7 @@ while (true) {
 			),
 		);
 		// progress.log($colors.yellow(`debug: ${total}`));
-		progress.update(responseSize, {
+		progress.update(bytesReceived, {
 			forceRender: true,
 			isComplete: true,
 			// tokenOverrides: [['value', `${coefEngTotal}`]],
