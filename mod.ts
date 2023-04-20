@@ -103,6 +103,7 @@ export interface RenderConfigOptions {
 	autoCompleteOnAllComplete?: boolean;
 	clearAllOnComplete?: boolean;
 	displayAlways?: boolean;
+	displayStartTime?: Date;
 	dynamicCompleteHeight?: boolean;
 	dynamicUpdateHeight?: boolean;
 	hideCursor?: boolean;
@@ -127,6 +128,9 @@ export interface UpdateOptions {
 	progressBarWidthMax?: number;
 	progressBarWidthMin?: number;
 	progressTemplate?: string;
+	/** per-line start time (null => defer to displayStartTime) */
+	startTime?: Date | null;
+	/** per-call/transient token overrides */
 	tokenOverrides?: [string, string][];
 }
 
@@ -201,7 +205,6 @@ export default class Progress {
 
 	private display = true;
 	private isCompleted = false;
-	private startTime = Date.now();
 	private priorLines: {
 		id: number | string;
 		text: string | null;
@@ -210,6 +213,7 @@ export default class Progress {
 	}[] = [];
 	private priorRenderTime = 0;
 	// private renderFrame = 0; // for spinners
+	private startTime: Date;
 	private titleLines: string[];
 	#cursorPosition: CursorPosition = 'blockStart';
 	#progressBarSymbolWidth = 1;
@@ -250,10 +254,12 @@ export default class Progress {
 		progressBarWidthMax = 50, // characters
 		progressBarWidthMin = 10, // characters
 		progressTemplate = '{label} {percent}% {bar} ({elapsed}s) {value}/{goal}',
+		startTime = null,
 		tokenOverrides = [],
 		autoCompleteOnAllComplete = true,
 		clearAllOnComplete = false,
 		displayAlways = false,
+		displayStartTime = new Date(),
 		dynamicCompleteHeight = false,
 		dynamicUpdateHeight = false,
 		hideCursor = false,
@@ -262,6 +268,7 @@ export default class Progress {
 		ttyColumns = ttySize?.columns ?? 80,
 		writer = Deno.stderr,
 	}: ProgressConstructionOptions = {}) {
+		this.startTime = new Date();
 		// convert all symbols to a common display width
 		this.#progressBarSymbolWidth = Math.max(
 			stringWidth(progressBarSymbolComplete),
@@ -288,12 +295,14 @@ export default class Progress {
 			progressBarWidthMax,
 			progressBarWidthMin,
 			progressTemplate,
+			startTime,
 			tokenOverrides,
 		};
 		this.renderSettings = {
 			autoCompleteOnAllComplete,
 			clearAllOnComplete,
 			displayAlways,
+			displayStartTime,
 			dynamicCompleteHeight,
 			dynamicUpdateHeight,
 			hideCursor,
@@ -365,15 +374,21 @@ export default class Progress {
 	): void {
 		type PriorLine = typeof this.priorLines[number];
 
-		const forceRender = render_?.forceRender ?? options_?.forceRender ?? false;
-
-		// console.warn('update', { updates_, options_, render_ });
 		// console.warn('update', { isCompleted: this.isCompleted, display: this.display });
+		// console.warn('update', { updates_, options_, render_ });
+
+		options_ = options_ ?? {};
+		render_ = render_ ?? {};
+
+		const forceRender = render_.forceRender ?? options_.forceRender ?? false;
+
 		// console.warn('update', { forceRender });
 
 		if ((this.isCompleted || !this.display) && !forceRender) return;
 
-		const now = Date.now();
+		const nowDate = new Date();
+		const now = nowDate.valueOf();
+		// const now = Date.now();
 		const msUpdateInterval = now - this.priorRenderTime;
 		if (!forceRender && (msUpdateInterval < this.renderSettings.minUpdateInterval)) return;
 
@@ -382,13 +397,18 @@ export default class Progress {
 		let updates: ([number, (Required<UpdateOptions> & { id?: string })] | null)[];
 		const defaultOptions = this.defaultUpdateSettings;
 		if (!Array.isArray(updates_)) {
+			options_.startTime = this.priorLines[0]?.options.startTime ?? options_.startTime ?? nowDate;
 			updates = [[updates_, { ...defaultOptions, ...(this.priorLines[0]?.options), ...options_ }]];
 		} else {
 			updates = updates_.map((e, idx) =>
 				(e != null)
 					? (Array.isArray(e)
-						? [e[0], { ...defaultOptions, ...(this.priorLines[idx]?.options), ...e[1] }]
-						: [e, { ...defaultOptions, ...(this.priorLines[0]?.options) }])
+						? (() => {
+							e[1] = e[1] ?? {};
+							e[1].startTime = this.priorLines[idx]?.options.startTime ?? e[1].startTime ?? nowDate;
+							return [e[0], { ...defaultOptions, ...(this.priorLines[idx]?.options), ...e[1] }];
+						})()
+						: [e, { ...defaultOptions, ...(this.priorLines[0]?.options), startTime: nowDate }])
 					: null
 			);
 		}
@@ -402,11 +422,14 @@ export default class Progress {
 				updatedLines[idx] = null;
 			} else {
 				const value = updates[idx]![0];
-				// const options = { ...(this.priorLines[idx]?.options), ...updates[idx]![1] };
-				const options = updates[idx]![1];
+				const options = { ...(this.priorLines[idx]?.options), ...updates[idx]![1] };
+				// const options = updates[idx]![1];
 				const id = options.id ?? idx;
-				const { updateText, completed } = this.priorLines[idx]?.completed
-					? { updateText: this.priorLines[idx].text, completed: this.priorLines[idx].completed }
+				const { updateText, completed } = (!forceRender && this.priorLines[idx]?.completed)
+					? {
+						updateText: this.priorLines[idx].text,
+						completed: options?.isComplete || this.priorLines[idx].completed,
+					}
 					: this.#renderLine(value, options);
 				const clear = options.clearOnComplete && completed;
 				// console.warn({ updateText, clear });
@@ -415,6 +438,7 @@ export default class Progress {
 		}
 		// console.warn({ updatedLines });
 
+		if (!this.display) return;
 		{ // update display // ToDO: [2023-03; rivy] revise as method
 			const nextLines: typeof this.priorLines = [];
 			const dynamicHeight = this.renderSettings.dynamicUpdateHeight;
@@ -424,7 +448,9 @@ export default class Progress {
 			for (let idx = 0; idx < updatedLines.length; idx++) {
 				const line = updatedLines[idx] ?? this.priorLines[idx];
 				if (!dynamicHeight || (line.text != null)) {
-					nextLines[displayLineIndex++] = line;
+					nextLines[displayLineIndex] = line;
+					nextLines[displayLineIndex].options.tokenOverrides = []; // token overrides are transient
+					displayLineIndex++;
 				}
 			}
 			// * show new display frame
@@ -458,14 +484,18 @@ export default class Progress {
 	// * refresh() ~ re-renders() and re-displays progress display block
 	// * display()
 
-	#renderLine(v: number, options: Required<UpdateOptions>) {
+	#renderLine(
+		v: number,
+		options: Required<UpdateOptions>,
+	): { updateText: string; completed: boolean } {
 		// if ((isNaN(v)) || (v < 0)) {
 		// 	throw new Error(`progress: value must be a number which is greater than or equal to 0`);
 		// }
-		// console.warn({ options });
+		// console.warn('#renderLine', { v, options });
 
 		const now = Date.now();
-		const age = now - this.startTime; // (in ms)
+		// const progressDisplayAge = now - this.startTime.valueOf(); // (in ms)
+		const age = now - (options.startTime?.valueOf() ?? this.startTime.valueOf()); // (in ms)
 
 		const goal = options.goal;
 

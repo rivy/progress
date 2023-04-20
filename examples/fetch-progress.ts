@@ -38,30 +38,29 @@ function randomPick<T>(array: T[]) {
 	return array[n];
 }
 
-const isWinOS = Deno.build.os === 'windows';
-// ANSI CSI sequences; ref: <https://en.wikipedia.org/wiki/ANSI_escape_code> @@ <https://archive.is/CUtrX>
-const ansiCSI = {
-	clearEOL: '\x1b[0K',
-	clearEOS: '\x1b[0J',
-	clearLine: '\x1b[2K',
-	cursorUp: /* move cursor up {n} lines */ '\x1b[{n}A',
-	hideCursor: '\x1b[?25l',
-	showCursor: '\x1b[?25h',
-};
-import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.ts';
-
-['unload'].forEach((eventType) =>
-	addEventListener(eventType, (_: Event) => {
-		// ToDO: [2023-03; rivy] evaluate this for potential problems and conversion to a module of some kind
-		// NOTE: WinOS CMD shell adds newline to console output prior to the prompt display
-		//   ... notably PowerShell does *not*, and there is no easy way to differentiate between CMD and PowerShell as parent processes
-		// * if desired, match WinOS (CMD shell) to POSIX appearance (by moving the cursor up one line prior to exit)
-		// * alternatively, PROMPT can be used similar effect with the minor quibble of the prompt never being displayed on the last line of the console (for single line prompts)
-		// const encoder = new TextEncoder();
-		// const msg = ansiCSI.cursorUp.replace('{n}', '1');
-		// if (isWinOS) writeAllSync(Deno.stdout, encoder.encode(msg));
-	})
-);
+// const isWinOS = Deno.build.os === 'windows';
+// // ANSI CSI sequences; ref: <https://en.wikipedia.org/wiki/ANSI_escape_code> @@ <https://archive.is/CUtrX>
+// const ansiCSI = {
+// 	clearEOL: '\x1b[0K',
+// 	clearEOS: '\x1b[0J',
+// 	clearLine: '\x1b[2K',
+// 	cursorUp: /* move cursor up {n} lines */ '\x1b[{n}A',
+// 	hideCursor: '\x1b[?25l',
+// 	showCursor: '\x1b[?25h',
+// };
+// import { writeAllSync } from 'https://deno.land/std@0.126.0/streams/conversion.ts';
+// ['unload'].forEach((eventType) =>
+// 	addEventListener(eventType, (_: Event) => {
+// 		// ToDO: [2023-03; rivy] evaluate this for potential problems and conversion to a module of some kind
+// 		// NOTE: WinOS CMD shell adds newline to console output prior to the prompt display
+// 		//   ... notably PowerShell does *not*, and there is no easy way to differentiate between CMD and PowerShell as parent processes
+// 		// * if desired, match WinOS (CMD shell) to POSIX appearance (by moving the cursor up one line prior to exit)
+// 		// * alternatively, PROMPT can be used similar effect with the minor quibble of the prompt never being displayed on the last line of the console (for single line prompts)
+// 		const encoder = new TextEncoder();
+// 		const msg = ansiCSI.cursorUp.replace('{n}', '1');
+// 		if (isWinOS) writeAllSync(Deno.stdout, encoder.encode(msg));
+// 	})
+// );
 
 const urls = [
 	// FixME: add `insecure` (or `allowInsecure`) option to `fetch` to allow use of self-signed certificates
@@ -174,6 +173,7 @@ while (true) {
 		bytesReceived += bytesRead;
 		out += decoder.decode(result?.value);
 		// console.warn(`Received ${bytesReceived} bytes (of ${total} data)'`);
+		// console.warn(`Received ${bytesReceived} bytes'`);
 		// const value = f
 		// 	// .format(bytesReceived / (10 ** engScale))
 		// 	.format((Math.round(bytesReceived / (10 ** engScale) * 1000) + Number.EPSILON) / 1000)
