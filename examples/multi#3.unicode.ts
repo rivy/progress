@@ -26,6 +26,8 @@ const bars = new Progress({
 	hideCursor: true,
 });
 
+let tick = 0;
+
 let completed1 = 0;
 let completed2 = 0;
 let completed3 = 0;
@@ -35,25 +37,28 @@ let displayedDone2 = false;
 let displayedDone3 = false;
 
 function downloading() {
-	if (completed1 <= total) {
-		completed1 += 1;
-		completed2 += 3;
-		completed3 += 2;
-		bars.update([
-			[0, {
-				goal: 1,
-				progressTemplate: title,
-				completeTemplate: title + 'DONE',
-				clearOnComplete: false,
-			}],
-			[completed1, {
-				label: 'file1',
-				progressBarSymbolComplete: '*',
-				progressBarSymbolIncomplete: '.',
-			}],
-			[completed2, { label: 'file2', clearOnComplete: true }],
-			[completed3, { label: 'file3' /* completeTemplate: '*DONE*: {label}' */ }],
-		]);
+	tick += 1;
+
+	completed1 += 2;
+	completed2 += 3;
+	completed3 += 1;
+
+	if (Math.min(completed1, completed2, completed3) <= total) {
+		let up = [[0, {
+			goal: 1,
+			progressTemplate: title,
+			completeTemplate: title + 'DONE',
+			clearOnComplete: false,
+		}], [completed1, {
+			label: 'file1',
+			progressBarSymbolComplete: '*',
+			progressBarSymbolIncomplete: '.',
+		}]];
+		if (tick > 10) up = up.concat([[completed2, { label: 'file2', clearOnComplete: true }]]);
+		if (tick > 20) {
+			up = up.concat([[completed3, { label: 'file3' /* completeTemplate: '*DONE*: {label}' */ }]]);
+		}
+		bars.update(up);
 		if ((completed3 <= total) && (completed3 % 50 == 0)) {
 			logProgressInfo(bars, `file3: completed ${completed3} of ${total}`);
 		}
