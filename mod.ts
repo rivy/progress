@@ -30,7 +30,8 @@ import { bgGreen, bgWhite, sprintf, writeAllSync } from './deps.ts';
 import { cliTruncate, stringWidth } from './deps.ts';
 // import { GraphemeSplitter as _ } from './deps.ts';
 
-import { consoleSize } from './src/lib/consoleSize.ts';
+// import { consoleSize } from './src/lib/consoleSize.ts';
+import { consoleSize } from 'https://cdn.jsdelivr.net/gh/rivy/deno.dxx/src/lib/consoleSize.ts';
 
 // ToDO: [2023-03; rivy] add partial line functionality for single line progress displays, moving only back and forth along the current line
 //  #... * allows for in-line spinners or a simple progress percentage meter
