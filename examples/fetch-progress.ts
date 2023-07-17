@@ -1,3 +1,5 @@
+// spell-checker:ignore (names) rivy
+
 // import type {
 // 	ExportedChance,
 // 	Seeded,
